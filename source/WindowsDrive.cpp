@@ -1,15 +1,16 @@
 #include "stdafx.h"
 #include "WindowsDrive.h"
-#include "io/File.h"
+#include "WindowsUtilities.h"
+#include "../../Framework/source/io/File.h"
+#include "../../Framework/source/io/drive/DriveApi.h"
+#include "../../Framework/source/DateTime.h"
 #ifndef __INTELLISENSE__
 	#include <windows.h>
 #endif
 #define var const auto
 
-Jde::IO::IDrive* LoadDrive()
-{
-	return new Jde::IO::Drive::WindowsDrive();
-}
+std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_shared<Jde::IO::Drive::WindowsDrive>(); }
+
 
 namespace Jde::IO::Drive
 {
@@ -72,26 +73,21 @@ namespace Jde::IO::Drive
 		return entries;
 	}
 
-	SYSTEMTIME ToSystemTime( TimePoint time )noexcept
+	IDirEntryPtr WindowsDrive::Get( const fs::path& path )noexcept(false)
 	{
-		DateTime date{time};
-		SYSTEMTIME systemTime;
-		systemTime.wYear = date.Year();
-		systemTime.wMonth = date.Month(); 
-		systemTime.wDay = date.Day(); 
-		systemTime.wHour = date.Hour();
-		systemTime.wMinute = date.Minute();
-		systemTime.wSecond = date.Second();
-		systemTime.wMilliseconds = (WORD)( std::chrono::duration_cast<std::chrono::milliseconds>(time.time_since_epoch()).count()-std::chrono::duration_cast<std::chrono::seconds>(time.time_since_epoch()).count()*1000 );
-		return systemTime;
+		return make_shared<const DirEntry>( path );
 	}
 
 	tuple<FILETIME,FILETIME,FILETIME> GetTimes( const IDirEntry& dirEntry )
 	{
 		FILETIME createTime, modifiedTime;
-		SystemTimeToFileTime( &ToSystemTime(dirEntry.CreatedTime), &createTime );
+		var entryCreateTime = Windows::ToSystemTime( dirEntry.CreatedTime );
+		SystemTimeToFileTime( &entryCreateTime, &createTime );
 		if( dirEntry.ModifiedTime.time_since_epoch()!=Duration::zero() )
-			SystemTimeToFileTime( &ToSystemTime(dirEntry.ModifiedTime), &modifiedTime );
+		{
+			var entryModifiedTime = Windows::ToSystemTime( dirEntry.ModifiedTime );
+			SystemTimeToFileTime( &entryModifiedTime, &modifiedTime );
+		}
 		else
 			modifiedTime = createTime;
 		return std::make_tuple( createTime, modifiedTime, modifiedTime );
