@@ -1,4 +1,3 @@
-#include "stdafx.h"
 #include "WindowsDrive.h"
 #include "WindowsUtilities.h"
 #include "../../Framework/source/io/File.h"
@@ -102,9 +101,9 @@ namespace Jde::IO::Drive
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
 			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr ); 
 			if( hFile==INVALID_HANDLE_VALUE )
-				THROW( IOException( "Could not create '{}' - {}.", dir, GetLastError()) );
+				THROW( IOException( "Could not create '{}' - {}."sv, dir, GetLastError()) );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
-				WARN( "Could not update dir times '{}' - {}.", dir, GetLastError() );
+				WARN( "Could not update dir times '{}' - {}."sv, dir, GetLastError() );
 			CloseHandle( hFile );
 		}
 		return make_shared<DirEntry>( dir );
@@ -117,9 +116,9 @@ namespace Jde::IO::Drive
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
 			auto hFile = CreateFileW( WindowsPath(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
 			if( hFile==INVALID_HANDLE_VALUE )
-				THROW( IOException("Could not create '{}' - {}.", path.string(), GetLastError()) );
+				THROW( IOException("Could not create '{}' - {}."sv, path.string(), GetLastError()) );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
-				WARN( "Could not update file times '{}' - {}.", path.string(), GetLastError() );
+				WARN( "Could not update file times '{}' - {}."sv, path.string(), GetLastError() );
 			CloseHandle( hFile );
 		}
 		return make_shared<DirEntry>( path );
