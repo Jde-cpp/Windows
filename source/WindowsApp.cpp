@@ -3,10 +3,10 @@
 
 namespace Jde
 {
-	void OSApp::Startup( int argc, char** argv, string_view appName )noexcept
+	set<string> OSApp::Startup( int argc, char** argv, string_view appName )noexcept
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
-		IApplication::_pInstance->BaseStartup( argc, argv, appName );	
+		return IApplication::_pInstance->BaseStartup( argc, argv, appName );	
 	}
 	bool OSApp::KillInstance( uint /*processId*/ )noexcept
 	{
@@ -18,7 +18,7 @@ namespace Jde
 		::SetConsoleTitle( string(title).c_str() );
 	}
 
-	BOOL HandlerRoutine( DWORD  ctrlType )
+	[[noreturn]] BOOL HandlerRoutine( DWORD  ctrlType )
 	{
 		Jde::GetDefaultLogger()->trace( "Caught signal %d", ctrlType );
 		for( auto pThread : IApplication::GetBackgroundThreads() )
@@ -26,7 +26,7 @@ namespace Jde
 		for( auto pThread : IApplication::GetBackgroundThreads() )
 			pThread->Join();
 		exit( 1 ); 
-//		return TRUE;
+//		unreachable... return TRUE;
 	}
 	void AddSignals2()noexcept(false)
 	{
@@ -35,10 +35,7 @@ namespace Jde
 	}
 	void OSApp::AddSignals()noexcept(false)
 	{
-//		std::function<BOOL(DWORD)> fnctn = [](DWORD){return 1;};
 		AddSignals2();
-	//	if( !SetConsoleCtrlHandler(HandlerRoutine, TRUE) )
-	//		THROW( EnvironmentException("Could not set control handler") );
 	}
 
 	void IApplication::OnTerminate()noexcept
