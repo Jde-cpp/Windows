@@ -1,9 +1,11 @@
 #include "../../Framework/source/application/Application.h"
 #include "../../Framework/source/threading/InterruptibleThread.h"
 
+#define var const auto
+
 namespace Jde
 {
-	set<string> OSApp::Startup( int argc, char** argv, string_view appName )noexcept
+	set<string> OSApp::Startup( int argc, char** argv, string_view appName )noexcept(false)
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
 		return IApplication::_pInstance->BaseStartup( argc, argv, appName );	
@@ -45,6 +47,7 @@ namespace Jde
 
 	bool OSApp::AsService()noexcept
 	{
+		std::cerr << "AsService not implemented use -c switch" << std::endl;
 		CRITICAL0("AsService not implemented"sv);
 		throw "not implemented";
 	}
@@ -52,5 +55,21 @@ namespace Jde
 	{
 		INFO( "Pausing main thread. {}"sv, _getpid() );
 		std::this_thread::sleep_for(9000h); 
+	}
+	string OSApp::GetEnvironmentVariable( string_view variable )noexcept
+	{
+		char buffer[32767];
+		string result;
+		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
+			DBG( "GetEnvironmentVariable('{}') failed return {}"sv, variable, ::GetLastError() );
+		else
+			result = buffer;
+
+		return result;
+	}
+	fs::path OSApp::ProgramDataFolder()noexcept
+	{
+		var env = GetEnvironmentVariable( "ProgramData" );
+		return env.size() ? fs::path{env} : fs::path{};
 	}
 }
