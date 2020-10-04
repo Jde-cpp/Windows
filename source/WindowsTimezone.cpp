@@ -5,9 +5,16 @@
 //https://stackoverflow.com/questions/3623471/how-do-you-get-info-for-an-arbitrary-time-zone-in-windows
 namespace Jde::Timezone
 {
-	Duration GetGmtOffset( string_view name, TimePoint utc )noexcept(false)
+	Duration GetGmtOffset( string_view inputName, TimePoint utc )noexcept(false)
 	{
-		std::wstring wstr = Windows::ToWString( string(name) );
+		CIString ciName{ inputName };
+		if( ciName=="EST (Eastern Standard Time)"sv )
+			ciName = "Eastern Standard Time"sv;
+		else if( ciName=="MET (Middle Europe Time)"sv )
+			ciName = "W. Europe Standard Time"sv;
+		else
+			ciName = inputName;
+		std::wstring wstr = Windows::ToWString( ciName );
 		DYNAMIC_TIME_ZONE_INFORMATION dynamicTimezone = {};
 		DWORD result=0;
 		for( DWORD i = 0; result!=ERROR_NO_MORE_ITEMS; ++i )
@@ -17,7 +24,7 @@ namespace Jde::Timezone
 				break;
 		}
 		if( result!=ERROR_SUCCESS )
-			THROW( Exception("Could not find timezone '{}'", name) );
+			THROW( Exception("Could not find timezone '{}'", ciName.c_str()) );
 		
 		DateTime myTime{utc};
 		TIME_ZONE_INFORMATION tz;
