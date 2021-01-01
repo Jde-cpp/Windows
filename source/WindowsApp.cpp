@@ -1,6 +1,7 @@
 #include "../../Framework/source/application/Application.h"
 #include "../../Framework/source/threading/InterruptibleThread.h"
-
+#include "WindowsDrive.h"
+#include <Psapi.h>
 #define var const auto
 
 namespace Jde
@@ -40,9 +41,37 @@ namespace Jde
 		AddSignals2();
 	}
 
+	size_t IApplication::MemorySize()noexcept
+	{
+		PROCESS_MEMORY_COUNTERS memCounter;
+		/*BOOL result =*/ GetProcessMemoryInfo( ::GetCurrentProcess(), &memCounter, sizeof( memCounter ) );
+		return memCounter.WorkingSetSize;
+	}
+	fs::path IApplication::Path()noexcept
+	{
+		char* szExeFileName[MAX_PATH]; 
+		::GetModuleFileNameA( NULL, (char*)szExeFileName, MAX_PATH );
+		return fs::path( (char*)szExeFileName );
+	}
+	string IApplication::HostName()noexcept
+	{
+		constexpr uint maxHostName = 1024;
+		char hostname[maxHostName];
+		return hostname;
+	}
+	uint IApplication::ProcessId()noexcept
+	{
+		return _getpid();
+	}
+
 	void IApplication::OnTerminate()noexcept
 	{
 		//TODO Implement
+	}
+	
+	sp<IO::IDrive> IApplication::DriveApi()noexcept
+	{
+		return make_shared<IO::Drive::WindowsDrive>();
 	}
 
 	bool OSApp::AsService()noexcept

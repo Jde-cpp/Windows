@@ -8,12 +8,10 @@ namespace Jde::Timezone
 	Duration GetGmtOffset( string_view inputName, TimePoint utc )noexcept(false)
 	{
 		CIString ciName{ inputName };
-		if( ciName=="EST (Eastern Standard Time)"sv )
+		if( ciName=="EST (Eastern Standard Time)"sv || ciName=="US/Eastern"sv )
 			ciName = "Eastern Standard Time"sv;
 		else if( ciName=="MET (Middle Europe Time)"sv )
 			ciName = "W. Europe Standard Time"sv;
-		else
-			ciName = inputName;
 		std::wstring wstr = Windows::ToWString( ciName );
 		DYNAMIC_TIME_ZONE_INFORMATION dynamicTimezone = {};
 		DWORD result=0;
@@ -25,7 +23,7 @@ namespace Jde::Timezone
 		}
 		if( result!=ERROR_SUCCESS )
 			THROW( Exception("Could not find timezone '{}'", ciName.c_str()) );
-		
+
 		DateTime myTime{utc};
 		TIME_ZONE_INFORMATION tz;
 		if( !GetTimeZoneInformationForYear(static_cast<USHORT>(myTime.Year()), &dynamicTimezone, &tz) )
@@ -35,7 +33,7 @@ namespace Jde::Timezone
 		SYSTEMTIME localTime;
 		if( !SystemTimeToTzSpecificLocalTime(&tz, &systemTime, &localTime) )
 			THROW( Exception("SystemTimeToTzSpecificLocalTime failed - {}", GetLastError()) );
-		
+
 		return Windows::ToTimePoint( localTime )-Windows::ToTimePoint( systemTime );
 	}
 

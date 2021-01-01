@@ -3,9 +3,6 @@
 #include "../../Framework/source/io/File.h"
 #include "../../Framework/source/io/drive/DriveApi.h"
 #include "../../Framework/source/DateTime.h"
-#ifndef __INTELLISENSE__
-	#include <windows.h>
-#endif
 #define var const auto
 
 std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_shared<Jde::IO::Drive::WindowsDrive>(); }
@@ -99,7 +96,7 @@ namespace Jde::IO::Drive
 		if( dirEntry.CreatedTime.time_since_epoch()!=Duration::zero() )
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
-			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr ); 
+			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
 			if( hFile==INVALID_HANDLE_VALUE )
 				THROW( IOException( "Could not create '{}' - {}."sv, dir, GetLastError()) );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
@@ -123,10 +120,15 @@ namespace Jde::IO::Drive
 		}
 		return make_shared<DirEntry>( path );
 	}
-	
+
 	//VectorPtr<char> WindowsDrive::Load( const fs::path& path )noexcept(false)
 	VectorPtr<char> WindowsDrive::Load( const IDirEntry& dirEntry )noexcept(false)
 	{
 		return IO::FileUtilities::LoadBinary( dirEntry.Path );
+	}
+
+	void WindowsDrive::SoftLink( path from, path to )noexcept(false)
+	{
+		THROW_IF( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), Exception("Creating symbolic link from '{}' to '{}' has failed - {}", from.string().c_str(), to.string().c_str(), GetLastError()) );
 	}
 }

@@ -13,10 +13,12 @@ namespace Jde::IO::Drive
 		map<string,IDirEntryPtr> Recursive( const fs::path& dir )noexcept(false) override;
 		IDirEntryPtr Save( const fs::path& path, const vector<char>& bytes, const IDirEntry& dirEntry )noexcept(false) override;
 		IDirEntryPtr CreateFolder( const fs::path& path, const IDirEntry& dirEntry )noexcept(false) override;
-		virtual void Remove( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
-		virtual void Trash( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
-		virtual void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( Exception("Not Implemented") );}
+		void Remove( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
+		void Trash( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
+		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( Exception("Not Implemented") );}
 		//VectorPtr<char> Load( const fs::path& path )noexcept(false) override;
 		VectorPtr<char> Load( const IDirEntry& dirEntry )noexcept(false) override;
+		void Restore( sv )noexcept(false)override{ THROW(Exception("Not Implemented")); }
+		void SoftLink( path from, path to )noexcept(false)override;
 	};
 }
