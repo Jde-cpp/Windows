@@ -10,7 +10,7 @@ namespace Jde::Timezone
 		CIString ciName{ inputName };
 		if( ciName=="EST (Eastern Standard Time)"sv || ciName=="US/Eastern"sv )
 			ciName = "Eastern Standard Time"sv;
-		else if( ciName=="MET (Middle Europe Time)"sv )
+		else if( ciName=="MET (Middle Europe Time)"sv || ciName=="MET"sv )
 			ciName = "W. Europe Standard Time"sv;
 		std::wstring wstr = Windows::ToWString( ciName );
 		DYNAMIC_TIME_ZONE_INFORMATION dynamicTimezone = {};
