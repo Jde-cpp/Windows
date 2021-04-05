@@ -55,8 +55,10 @@ namespace Jde
 	}
 	string IApplication::HostName()noexcept
 	{
-		constexpr uint maxHostName = 1024;
-		char hostname[maxHostName];
+		DWORD maxHostName = 1024;
+		char hostname[1024];
+		THROW_IF( !::GetComputerNameA(hostname, &maxHostName), Exception("GetComputerNameA failed") );
+
 		return hostname;
 	}
 	uint IApplication::ProcessId()noexcept
@@ -90,7 +92,7 @@ namespace Jde
 		char buffer[32767];
 		string result;
 		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
-			DBG( "GetEnvironmentVariable('{}') failed return {}"sv, variable, ::GetLastError() );
+			DBG( "GetEnvironmentVariable('{}') failed return {}"sv, variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
 		else
 			result = buffer;
 
@@ -101,6 +103,4 @@ namespace Jde
 		var env = GetEnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};
 	}
-
-
 }
