@@ -5,7 +5,7 @@
 //https://stackoverflow.com/questions/3623471/how-do-you-get-info-for-an-arbitrary-time-zone-in-windows
 namespace Jde::Timezone
 {
-	Duration GetGmtOffset( string_view inputName, TimePoint utc )noexcept(false)
+	Duration GetGmtOffset( sv inputName, TimePoint utc )noexcept(false)
 	{
 		CIString ciName{ inputName };
 		if( ciName=="EST (Eastern Standard Time)"sv || ciName=="US/Eastern"sv )

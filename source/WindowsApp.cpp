@@ -6,7 +6,7 @@
 
 namespace Jde
 {
-	set<string> OSApp::Startup( int argc, char** argv, string_view appName )noexcept(false)
+	set<string> OSApp::Startup( int argc, char** argv, sv appName )noexcept(false)
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
 		return IApplication::_pInstance->BaseStartup( argc, argv, appName );	
@@ -16,7 +16,7 @@ namespace Jde
 		CRITICAL0( "Kill not implemented"sv );
 		return false;
 	}
-	void OSApp::SetConsoleTitle( string_view title )noexcept
+	void OSApp::SetConsoleTitle( sv title )noexcept
 	{
 		::SetConsoleTitle( string(title).c_str() );
 	}
@@ -87,7 +87,7 @@ namespace Jde
 		INFO( "Pausing main thread. {}"sv, _getpid() );
 		std::this_thread::sleep_for(9000h); 
 	}
-	string OSApp::GetEnvironmentVariable( string_view variable )noexcept
+	string OSApp::GetEnvironmentVariable( sv variable )noexcept
 	{
 		char buffer[32767];
 		string result;
