@@ -1,5 +1,5 @@
 #include "../../Framework/source/DateTime.h"
-#include "../../Framework/source/StringUtilities.h"
+#include <jde/Str.h>
 #include "WindowsUtilities.h"
 #define var const auto
 //https://stackoverflow.com/questions/3623471/how-do-you-get-info-for-an-arbitrary-time-zone-in-windows

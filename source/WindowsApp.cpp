@@ -1,4 +1,4 @@
-#include "../../Framework/source/application/Application.h"
+#include <jde/App.h>
 #include "../../Framework/source/threading/InterruptibleThread.h"
 #include "WindowsDrive.h"
 #include <Psapi.h>

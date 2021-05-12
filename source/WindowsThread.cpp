@@ -65,7 +65,7 @@ namespace Jde
 				WARN( "Could not set name for thread({}) {} - ({}) - {} "sv, h, ansiDescription, hr, ::GetLastError() );
 		}
 		SetThreadName( h, string{ansiDescription}.c_str() );
-		var x = Threading::GetThreadDescription();
+		//var x = Threading::GetThreadDescription();
 		delete[] p;
 	}
 
