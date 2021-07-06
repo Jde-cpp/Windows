@@ -13,7 +13,7 @@ namespace Jde
 	}
 	bool OSApp::KillInstance( uint /*processId*/ )noexcept
 	{
-		CRITICAL0( "Kill not implemented"sv );
+		CRITICAL( "Kill not implemented"sv );
 		return false;
 	}
 	void OSApp::SetConsoleTitle( sv title )noexcept
@@ -79,7 +79,7 @@ namespace Jde
 	bool OSApp::AsService()noexcept
 	{
 		std::cerr << "AsService not implemented use -c switch" << std::endl;
-		CRITICAL0("AsService not implemented"sv);
+		CRITICAL("AsService not implemented"sv);
 		throw "not implemented";
 	}
 	void OSApp::OSPause()noexcept

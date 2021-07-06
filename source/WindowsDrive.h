@@ -1,13 +1,74 @@
-#pragma once
-//#include "Exports.h"
+﻿#pragma once
+#include "WindowsHandle.h"
+#include <jde/coroutine/Task.h>
 #include "../../Framework/source/io/DiskWatcher.h"
-//#include "io/drive/DriveApi.h"
-
-//extern "C" JDE_DRIVE_WINDOWS_EXPORT Jde::IO::IDrive* LoadDrive();
+#include "../../Framework/source/coroutine/Awaitable.h"
+#include "../../Framework/source/threading/Worker.h"
 
 namespace Jde::IO::Drive
 {
-	struct WindowsDrive final:	public IDrive
+	using namespace Coroutine;
+
+	//struct IDrive;
+	//auto CloseFile = [](HANDLE h){ if( h && !::CloseHandle(h) ) WARN( "CloseHandle returned '{}'"sv, ::GetLastError() ); };
+
+	struct DriveArg
+	{
+		DriveArg( fs::path&& path, sp<IDrive> pDrive, bool vec ):
+			IsRead{ true },
+			Path{ move(path) },
+			DrivePtr{ pDrive }
+		{
+			if( vec )
+				Buffer = make_shared<vector<char>>();
+			else
+				Buffer = make_shared<string>();
+		}
+		DriveArg( fs::path&& path, sp<IDrive> pDrive, sp<vector<char>> pVec ):
+			Path{ move(path) }, DrivePtr{ pDrive }, Buffer{ pVec }
+		{}
+		DriveArg( fs::path&& path, sp<IDrive> pDrive, sp<string> pData ):
+			Path{ move(path) }, DrivePtr{ pDrive }, Buffer{ pData }
+		{}
+
+		void SetWorker( sp<Threading::IWorker> p ){ _pWorkerKeepAlive=p; }
+		bool IsRead{false};
+		fs::path Path;
+		sp<IDrive> DrivePtr;
+		std::variant<sp<vector<char>>,sp<string>> Buffer;
+		HandlePtr FileHandle;
+		vector<::OVERLAPPED> OverLaps;
+		coroutine_handle<Coroutine::Task2::promise_type> CoHandle;
+	private:
+		sp<Threading::IWorker> _pWorkerKeepAlive;
+	};
+	struct DriveWorker : Threading::IQueueWorker<DriveArg,DriveWorker>
+	{
+		using base=Threading::IQueueWorker<DriveArg,DriveWorker>;
+		void HandleRequest( DriveArg&& x )noexcept override;
+		static void Remove( DriveArg* pArg )noexcept;
+		bool Poll()noexcept override;
+	private:
+		vector<DriveArg> Args;
+		DWORD ChunkSize{ 4096 };
+		uint8_t ThreadCount{ 5 };
+	};
+
+	struct DriveAwaitable : Coroutine::IAwaitable
+	{
+		using base=Coroutine::IAwaitable;
+		DriveAwaitable( fs::path&& path, bool vector, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, vector }{};
+		DriveAwaitable( fs::path&& path, sp<vector<char>> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{};
+		DriveAwaitable( fs::path&& path, sp<string> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{};
+		bool await_ready()noexcept override;
+		void await_suspend( typename base::THandle h )noexcept override;//{ base::await_suspend( h ); _pPromise = &h.promise(); }
+		TaskResult await_resume()noexcept override;
+	private:
+		std::exception_ptr ExceptionPtr;
+		DriveArg _arg;
+	};
+
+	struct JDE_NATIVE_VISIBILITY WindowsDrive final : IDrive//TODO remove JDE_NATIVE_VISIBILITY
 	{
 		IDirEntryPtr Get( const fs::path& path )noexcept(false) override;
 		map<string,IDirEntryPtr> Recursive( const fs::path& dir )noexcept(false) override;
@@ -16,9 +77,11 @@ namespace Jde::IO::Drive
 		void Remove( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
 		void Trash( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
 		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( Exception("Not Implemented") );}
-		//VectorPtr<char> Load( const fs::path& path )noexcept(false) override;
 		VectorPtr<char> Load( const IDirEntry& dirEntry )noexcept(false) override;
 		void Restore( sv )noexcept(false)override{ THROW(Exception("Not Implemented")); }
 		void SoftLink( path from, path to )noexcept(false)override;
+		DriveAwaitable Read( fs::path&& path, bool vector=true )noexcept{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
+		DriveAwaitable Write( fs::path&& path, sp<vector<char>> data )noexcept{ return DriveAwaitable{move(path), data, shared_from_this()}; }
+		DriveAwaitable Write( fs::path&& path, sp<string> data )noexcept{ return DriveAwaitable{move(path), data, shared_from_this()}; }
 	};
 }

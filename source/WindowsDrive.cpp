@@ -1,4 +1,4 @@
-#include "WindowsDrive.h"
+﻿#include "WindowsDrive.h"
 #include "WindowsUtilities.h"
 #include <jde/io/File.h>
 #include "../../Framework/source/io/drive/DriveApi.h"
@@ -10,6 +10,7 @@ std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_sh
 
 namespace Jde::IO::Drive
 {
+
 	std::wstring WindowsPath( const fs::path& path )
 	{
 		return std::wstring(L"\\\\?\\")+path.wstring();
@@ -37,9 +38,6 @@ namespace Jde::IO::Drive
 			FileTimeToSystemTime( &fInfo.ftLastWriteTime, &systemTime );
 			ModifiedTime = DateTime( systemTime.wYear, (uint8)systemTime.wMonth, (uint8)systemTime.wDay, (uint8)systemTime.wHour, (uint8)systemTime.wMinute, (uint8)systemTime.wSecond, std::chrono::milliseconds(systemTime.wMilliseconds) ).GetTimePoint();
 		}
-
-		//bool IsDirectory()const noexcept override{ return File.IsDirectory(); }
-
 	};
 
 	map<string,IDirEntryPtr>  WindowsDrive::Recursive( const fs::path& dir )noexcept(false)
@@ -130,5 +128,93 @@ namespace Jde::IO::Drive
 	void WindowsDrive::SoftLink( path from, path to )noexcept(false)
 	{
 		THROW_IF( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), Exception("Creating symbolic link from '{}' to '{}' has failed - {}", from.string().c_str(), to.string().c_str(), GetLastError()) );
+	}
+
+	TaskResult DriveAwaitable::await_resume()noexcept
+	{
+		base::AwaitResume();
+		return _pPromise ? TaskResult{ _pPromise->get_return_object().GetResult() } : TaskResult{ ExceptionPtr };
+	}
+	bool DriveAwaitable::await_ready()noexcept
+	{
+		try
+		{
+			DWORD access = _arg.IsRead ? GENERIC_READ : GENERIC_WRITE;
+			DWORD sharing = _arg.IsRead ? FILE_SHARE_READ : 0;
+			DWORD creationDisposition = _arg.IsRead ? OPEN_EXISTING : CREATE_ALWAYS;
+			DWORD dwFlagsAndAttributes = _arg.IsRead ? FILE_FLAG_SEQUENTIAL_SCAN : FILE_ATTRIBUTE_ARCHIVE;
+			_arg.FileHandle = HandlePtr( WinHandle(::CreateFile((string("\\\\?\\")+_arg.Path.string()).c_str(), access, sharing, nullptr, creationDisposition, FILE_FLAG_OVERLAPPED | dwFlagsAndAttributes, nullptr), [&](){return IOException(move(_arg.Path), GetLastError(), "CreateFile");}) );
+			if( _arg.IsRead )
+			{
+				LARGE_INTEGER fileSize;
+				THROW_IF( !::GetFileSizeEx(_arg.FileHandle.get(), &fileSize), IOException(move(_arg.Path), GetLastError(), "GetFileSizeEx") );
+				std::visit( [fileSize](auto&& b){b->resize(fileSize.QuadPart);}, _arg.Buffer );
+			}
+		}
+		catch( const IOException& e )
+		{
+			ExceptionPtr = std::make_exception_ptr( e );
+		}
+		return ExceptionPtr!=nullptr;
+	}
+	void DriveAwaitable::await_suspend( typename base::THandle h )noexcept
+	{
+		base::await_suspend( h );
+		_arg.CoHandle = h;
+		DriveWorker::Push( move(_arg) );
+		//auto hPort = ::CreateIoCompletionPort( hFile, nullptr, 0, 0 );
+	}
+	void OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD /*dwNumberOfBytesTransfered*/, LPOVERLAPPED pOverlapped )
+	{
+		DriveArg* pArg = (DriveArg*)pOverlapped->hEvent;
+		auto& returnObject = pArg->CoHandle.promise().get_return_object();
+		try
+		{
+			THROW_IF( dwErrorCode!=ERROR_SUCCESS, IOException{move(pArg->Path), dwErrorCode, "OverlappedCompletionRoutine"} );
+			if( auto p = find_if( pArg->OverLaps.begin(), pArg->OverLaps.end(), [pOverlapped](var& x){ return &x==pOverlapped;} ); p!=pArg->OverLaps.end() )
+				pArg->OverLaps.erase( p );
+			if( pArg->OverLaps.empty() )
+				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, pArg->Buffer) );
+		}
+		catch( Exception& e )
+		{
+			returnObject.SetResult( move(e) );
+		}
+		if( returnObject.HasResult() )
+		{
+			Coroutine::CoroutinePool::Resume( move(pArg->CoHandle) );
+			DriveWorker::Remove( pArg );
+		}
+	}
+	bool DriveWorker::Poll()noexcept
+	{
+		var newQueueItem = base::Poll();
+		var ioItem = Args.size() && ::SleepEx( 0, false );
+		return newQueueItem || ioItem;
+	}
+	void DriveWorker::Remove( DriveArg* x )noexcept
+	{
+		if( auto p=dynamic_pointer_cast<DriveWorker>(_pInstance); p )
+		{
+			if( auto pArg = find_if(p->Args.begin(), p->Args.end(), [x](auto& iArg){return &iArg==x;}); pArg!=p->Args.end() )
+				p->Args.erase( pArg );
+			else
+				WARN( "Could not find arg. {}"sv, x->Path.string() );
+		}
+	}
+	void DriveWorker::HandleRequest( DriveArg&& arg )noexcept
+	{
+		auto pArg = &Args.emplace_back( move(arg) );
+		var size = std::visit( [](auto&& x){return x->size();}, pArg->Buffer );
+		char* pData = std::visit( [](auto&& x){return x->data();}, pArg->Buffer );
+		for( uint i=0; i<size; i+=ChunkSize )
+		{
+			OVERLAPPED* pOverlap = &( pArg->OverLaps.emplace_back( OVERLAPPED{} ) ); pArg->OverLaps.rbegin()->Pointer = (PVOID)i; pArg->OverLaps.rbegin()->hEvent = pArg;
+			bool success;
+			if( pArg->IsRead )
+				success = ::ReadFileEx( pArg->FileHandle.get(), pData+i, ChunkSize, pOverlap, OverlappedCompletionRoutine  );
+			else
+				success = ::WriteFileEx( pArg->FileHandle.get(), pData+i, ChunkSize, pOverlap, OverlappedCompletionRoutine  );
+		}
 	}
 }
