@@ -12,13 +12,14 @@ namespace Jde::IO::Drive
 	//struct IDrive;
 	//auto CloseFile = [](HANDLE h){ if( h && !::CloseHandle(h) ) WARN( "CloseHandle returned '{}'"sv, ::GetLastError() ); };
 
-	struct DriveArg
+	struct DriveArg //: boost::noncopyable
 	{
 		DriveArg( fs::path&& path, sp<IDrive> pDrive, bool vec ):
 			IsRead{ true },
 			Path{ move(path) },
 			DrivePtr{ pDrive }
 		{
+			Overlaps.reserve( 5 );
 			if( vec )
 				Buffer = make_shared<vector<char>>();
 			else
@@ -30,14 +31,15 @@ namespace Jde::IO::Drive
 		DriveArg( fs::path&& path, sp<IDrive> pDrive, sp<string> pData ):
 			Path{ move(path) }, DrivePtr{ pDrive }, Buffer{ pData }
 		{}
-
+		void Send( up<::OVERLAPPED> pOverlapped )noexcept;
 		void SetWorker( sp<Threading::IWorker> p ){ _pWorkerKeepAlive=p; }
 		bool IsRead{false};
 		fs::path Path;
 		sp<IDrive> DrivePtr;
 		std::variant<sp<vector<char>>,sp<string>> Buffer;
 		HandlePtr FileHandle;
-		vector<::OVERLAPPED> OverLaps;
+		vector<up<::OVERLAPPED>> Overlaps;
+		vector<up<::OVERLAPPED>> OverlapsOverflow;//std::queue not working for some reason in windows.
 		coroutine_handle<Coroutine::Task2::promise_type> CoHandle;
 	private:
 		sp<Threading::IWorker> _pWorkerKeepAlive;
@@ -45,21 +47,25 @@ namespace Jde::IO::Drive
 	struct DriveWorker : Threading::IQueueWorker<DriveArg,DriveWorker>
 	{
 		using base=Threading::IQueueWorker<DriveArg,DriveWorker>;
+		DriveWorker():base{"DriveWorker"}{}
+		~DriveWorker(){ DBG("~DriveWorker"sv); }
+		using base=Threading::IQueueWorker<DriveArg,DriveWorker>;
 		void HandleRequest( DriveArg&& x )noexcept override;
 		static void Remove( DriveArg* pArg )noexcept;
+		static DWORD ChunkSize()noexcept{ return 4096; }
 		bool Poll()noexcept override;
 	private:
 		vector<DriveArg> Args;
-		DWORD ChunkSize{ 4096 };
+		//DWORD ChunkSize{ 4096 };
 		uint8_t ThreadCount{ 5 };
 	};
 
 	struct DriveAwaitable : Coroutine::IAwaitable
 	{
 		using base=Coroutine::IAwaitable;
-		DriveAwaitable( fs::path&& path, bool vector, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, vector }{};
-		DriveAwaitable( fs::path&& path, sp<vector<char>> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{};
-		DriveAwaitable( fs::path&& path, sp<string> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{};
+		DriveAwaitable( fs::path&& path, bool vector, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, vector }{ DBG("DriveAwaitable::Read"sv); }
+		DriveAwaitable( fs::path&& path, sp<vector<char>> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{ DBG("DriveAwaitable::Write"sv); }
+		DriveAwaitable( fs::path&& path, sp<string> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{ DBG("her3e"sv); }
 		bool await_ready()noexcept override;
 		void await_suspend( typename base::THandle h )noexcept override;//{ base::await_suspend( h ); _pPromise = &h.promise(); }
 		TaskResult await_resume()noexcept override;
