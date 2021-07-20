@@ -20,7 +20,7 @@ namespace Jde
       struct Deleter 
       {
          typedef WinHandle pointer;
-         void operator()( WinHandle handle )const noexcept{ WARN_IF( handle && !::CloseHandle(handle), "CloseHandle returned {}"sv, ::GetLastError() ); }
+         void operator()( WinHandle handle )const noexcept{ WARN_IF( handle && !::CloseHandle(handle), "CloseHandle returned {}", ::GetLastError() ); }
       };
    private:
       HANDLE _value;

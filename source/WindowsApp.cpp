@@ -1,7 +1,9 @@
 #include <jde/App.h>
+#include <Psapi.h>
 #include "../../Framework/source/threading/InterruptibleThread.h"
 #include "WindowsDrive.h"
-#include <Psapi.h>
+#include "WindowsSvc.h"
+#include "WindowsWorker.h"
 #define var const auto
 
 namespace Jde
@@ -18,7 +20,7 @@ namespace Jde
 	}
 	void OSApp::SetConsoleTitle( sv title )noexcept
 	{
-		::SetConsoleTitle( string(title).c_str() );
+		::SetConsoleTitle( format("{}({})", title, ProcessId()).c_str() );
 	}
 
 	[[noreturn]] BOOL HandlerRoutine( DWORD  ctrlType )
@@ -75,17 +77,25 @@ namespace Jde
 	{
 		return make_shared<IO::Drive::WindowsDrive>();
 	}
-
+	bool isService{false};
 	bool OSApp::AsService()noexcept
 	{
-		std::cerr << "AsService not implemented use -c switch" << std::endl;
-		CRITICAL("AsService not implemented"sv);
-		throw "not implemented";
+		isService = true;
+		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
+		return true;
 	}
 	void OSApp::OSPause()noexcept
 	{
-		INFO( "Pausing main thread. {}"sv, _getpid() );
-		std::this_thread::sleep_for(9000h); 
+		INFO( "Starting main thread loop...{}"sv, _getpid() );
+		if( isService )
+		{
+			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)IApplication::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
+			var success = StartServiceCtrlDispatcher( DispatchTable );//blocks?
+			if( !success )
+				Windows::Service::ReportEvent( "StartServiceCtrlDispatcher" ); 
+		}
+		else
+			Windows::WindowsWorkerMain::Start( false );
 	}
 	string OSApp::GetEnvironmentVariable( sv variable )noexcept
 	{

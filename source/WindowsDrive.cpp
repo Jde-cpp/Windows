@@ -240,12 +240,12 @@ namespace Jde::IO::Drive
 		pOverlap->hEvent = this;
 		if( IsRead )
 		{
-			RETURN_IF( !::ReadFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}"sv, Path.string(), GetLastError() );
+			RETURN_IF( !::ReadFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}", Path.string(), GetLastError() );
 		}
 		else
 		{
 			DBG( "Writing bytes {} - {}"sv, i, std::min(i+DriveWorker::ChunkSize(), endByteIndex) );
-			RETURN_IF( !::WriteFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}"sv, Path.string(), GetLastError() );
+			RETURN_IF( !::WriteFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}", Path.string(), GetLastError() );
 		}
 		Overlaps.emplace_back( move(pOverlap) );
 	}
