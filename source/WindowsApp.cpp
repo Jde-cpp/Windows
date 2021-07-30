@@ -8,11 +8,12 @@
 
 namespace Jde
 {
-	set<string> OSApp::Startup( int argc, char** argv, sv appName )noexcept(false)
+	set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )noexcept(false)
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
-		return IApplication::_pInstance->BaseStartup( argc, argv, appName );	
+		return IApplication::_pInstance->BaseStartup( argc, argv, appName, serviceDescription );	
 	}
+
 	bool OSApp::KillInstance( uint /*processId*/ )noexcept
 	{
 		CRITICAL( "Kill not implemented"sv );
@@ -51,9 +52,9 @@ namespace Jde
 	}
 	fs::path IApplication::Path()noexcept
 	{
-		char* szExeFileName[MAX_PATH]; 
-		::GetModuleFileNameA( NULL, (char*)szExeFileName, MAX_PATH );
-		return fs::path( (char*)szExeFileName );
+		//char* szExeFileName[MAX_PATH]; 
+		//::GetModuleFileNameA( NULL, (char*)szExeFileName, MAX_PATH );
+		return fs::path( _pgmptr );
 	}
 	string IApplication::HostName()noexcept
 	{
@@ -112,5 +113,54 @@ namespace Jde
 	{
 		var env = GetEnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};
+	}
+
+	struct SCDeleter
+	{
+		void operator()(SC_HANDLE p){ if( p ) ::CloseServiceHandle(p); }
+	};
+	using ServiceHandle = std::unique_ptr<SC_HANDLE__, SCDeleter>;
+
+	ServiceHandle MyOpenSCManager()noexcept(false)
+	{
+		auto schSCManager = ServiceHandle{ ::OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS) }; THROW_IF( schSCManager.get()==nullptr,  );
+		if( !schSCManager.get() )
+		{
+			var error = ::GetLastError();
+			THROW( Exception(error==ERROR_ACCESS_DENIED ? "installation requires administrative privliges." : format("OpenSCManager failed - {}", error)) );
+		}
+		return schSCManager;
+	}
+	void OSApp::Install( string serviceDescription )noexcept(false)
+	{
+		auto schSCManager = MyOpenSCManager();
+		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
+		const string serviceName{ ApplicationName() };
+		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, Path().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
+		if( !service.get() )
+		{
+			var error = ::GetLastError();
+			THROW( Exception(error==ERROR_SERVICE_EXISTS ? "Service allready exists." : format("CreateService failed - {}", error)) );
+		}
+		if( serviceDescription.size() )
+		{
+			SERVICE_DESCRIPTION d{ (LPSTR)serviceDescription.c_str() };
+			if( !::ChangeServiceConfig2A(service.get(), SERVICE_CONFIG_DESCRIPTION, &d) )
+				std::cerr << "ChangeServiceConfig2A failed" << std::endl;
+		}
+		INFO( "service '{}' installed successfully"sv, serviceName );
+	}
+	void OSApp::Uninstall()noexcept(false)
+	{
+		auto manager = MyOpenSCManager();
+		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
+		if( !service.get() )
+		{
+			var error = ::GetLastError();
+			THROW( Exception(error==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService '{}' failed - {}", error)) );
+		}
+		THROW_IF( !::DeleteService(service.get()), "DeleteService failed" );
+
+		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
 	}
 }
