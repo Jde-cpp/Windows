@@ -2,7 +2,7 @@
 
 namespace Jde::Windows::Service
 {
-	void ReportStatus( DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint )noexcept;
+	void ReportStatus(unsigned long dwCurrentState, unsigned long dwWin32ExitCode, unsigned long dwWaitHint )noexcept;
 	void ReportEvent( sv function )noexcept;
-	void Main( DWORD dwArgc, LPTSTR *lpszArgv )noexcept;
+	void Main(unsigned long dwArgc, LPTSTR *lpszArgv )noexcept;
 }
