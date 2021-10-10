@@ -22,7 +22,7 @@ namespace Jde::Windows
 	{
 		WindowsWorker( bool runOnMainThread )noexcept;
 		WindowsWorker( Event&& initial )noexcept;
-		~WindowsWorker(){ if( GetDefaultLogger() ) DBG("~WindowsWorker"sv); }
+		~WindowsWorker(){ DBG("~WindowsWorker"); }
 		void Stop()noexcept;
 		α SubPush( Event& e )noexcept->bool;
 		α Stopped()noexcept{ return ((TimePoint)_stop)!=TimePoint{}; }

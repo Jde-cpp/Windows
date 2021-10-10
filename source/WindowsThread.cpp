@@ -23,17 +23,11 @@ namespace Jde
 	void Initialize()noexcept
 	{
 		HMODULE hKernelBase = GetModuleHandleA("KernelBase.dll");
-		if( hKernelBase )
-		{
-			pSetThreadDescription = reinterpret_cast<TSetThreadDescription>( ::GetProcAddress(hKernelBase, "SetThreadDescription") );
-			if( !pSetThreadDescription )
-				ERR( "FATAL: failed to get SetThreadDescription() address, error:  {}"sv, ::GetLastError() );
-			pGetThreadDescription = reinterpret_cast<TGetThreadDescription>( ::GetProcAddress(hKernelBase, "GetThreadDescription") );
-			if( !pGetThreadDescription )
-				ERR( "FATAL: failed to get GetThreadDescription() address, error:  {}"sv, ::GetLastError() );
-		}
-		else
-			ERR( "FATAL: failed to get kernel32.dll module handle, error:  {}"sv, ::GetLastError() );
+		RETURN_IF( !hKernelBase, "FATAL: failed to get kernel32.dll module handle, error:  {}", ::GetLastError() );
+		pSetThreadDescription = reinterpret_cast<TSetThreadDescription>( ::GetProcAddress(hKernelBase, "SetThreadDescription") );
+		LOG_IF( !pSetThreadDescription, ELogLevel::Error, "FATAL: failed to get SetThreadDescription() address, error:  {}", ::GetLastError() );
+		pGetThreadDescription = reinterpret_cast<TGetThreadDescription>( ::GetProcAddress(hKernelBase, "GetThreadDescription") );
+		LOG_IF( !pGetThreadDescription, ELogLevel::Error, "FATAL: failed to get GetThreadDescription() address, error:  {}", ::GetLastError() );
 	}
 	void SetThreadName( HANDLE h, const char* ansiDescription )noexcept
 	{
@@ -45,58 +39,54 @@ namespace Jde
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{}
 	}
-	void WinSetThreadDscrptn( HANDLE h, std::string_view ansiDescription )noexcept
+#pragma warning( disable: 4305 )
+	void WinSetThreadDscrptn( HANDLE h, sv ansiDescription )noexcept
 	{
-		int wcharCount = ::MultiByteToWideChar( CP_UTF8, 0, string{ansiDescription}.c_str() , -1, NULL , 0 );
-		auto p = new wchar_t[wcharCount];
-		::MultiByteToWideChar( CP_UTF8, 0, ansiDescription.data(), -1, p, wcharCount );
+		var count = ::MultiByteToWideChar( CP_UTF8, 0, string{ansiDescription}.c_str() , -1, NULL , 0 );
+		vector<wchar_t> wc; wc.reserve( count );
+		::MultiByteToWideChar( CP_UTF8, 0, ansiDescription.data(), -1, wc.data(), count );
 		if( !pSetThreadDescription )
 			Initialize();
-		if( pSetThreadDescription )
-		{
-			HRESULT hr = (*pSetThreadDescription)( h, p );
-			if( FAILED(hr) )
-				WARN( "Could not set name for thread({}) {} - ({}) - {} "sv, h, ansiDescription, hr, ::GetLastError() );
-		}
+		LOG_IF( pSetThreadDescription && FAILED((*pSetThreadDescription)(h, wc.data())), ELogLevel::Error, "Could not set name for thread({}) {} - (hr) - {} ", ansiDescription, h, ::GetLastError() );
+
 		SetThreadName( h, string{ansiDescription}.c_str() );
-		delete[] p;
 	}
 
-		uint Threading::GetThreadId()noexcept
-		{
-			return ThreadId ? ThreadId : ThreadId = ::GetCurrentThreadId();
-		}
+	uint Threading::GetThreadId()noexcept
+	{
+		return ThreadId ? ThreadId : ThreadId = ::GetCurrentThreadId();
+	}
 
-		void Threading::SetThreadDscrptn( std::thread& thread, sv pszDescription )noexcept
-		{
-			WinSetThreadDscrptn( static_cast<HANDLE>(thread.native_handle()), pszDescription );
-		}
-		void Threading::SetThreadDscrptn( sv description )noexcept
-		{
-			WinSetThreadDscrptn( ::GetCurrentThread(), description );
-		}
+	void Threading::SetThreadDscrptn( std::thread& thread, sv pszDescription )noexcept
+	{
+		WinSetThreadDscrptn( static_cast<HANDLE>(thread.native_handle()), pszDescription );
+	}
+	void Threading::SetThreadDscrptn( sv description )noexcept
+	{
+		WinSetThreadDscrptn( ::GetCurrentThread(), description );
+	}
 
-		const char* Threading::GetThreadDescription()noexcept
+	const char* Threading::GetThreadDescription()noexcept
+	{
+		if( std::strlen(ThreadName)==0 )
 		{
-			if( std::strlen(ThreadName)==0 )
+			PWSTR pszThreadDescription;
+			var threadId = ::GetCurrentThread();
+			if( !pGetThreadDescription )
+				Initialize();
+			if( !pGetThreadDescription )
+				return ThreadName;
+			var hr = (*pGetThreadDescription)( threadId, &pszThreadDescription );
+			if( SUCCEEDED(hr) )
 			{
-				PWSTR pszThreadDescription;
-				var threadId = ::GetCurrentThread();
-				if( !pGetThreadDescription )
-					Initialize();
-				if( !pGetThreadDescription )
-					return ThreadName;
-				var hr = (*pGetThreadDescription)( threadId, &pszThreadDescription );
-				if( SUCCEEDED(hr) )
-				{
-					var size = wcslen(pszThreadDescription);
-					auto pDescription = make_unique<char[]>( size+1 );
-					uint size2;
-					wcstombs_s( &size2, pDescription.get(), size+1, pszThreadDescription, size );
-					::LocalFree( pszThreadDescription );
-					std::strncpy( ThreadName, pDescription.get(), sizeof(ThreadName)/sizeof(ThreadName[0]) );
-				}
+				var size = wcslen(pszThreadDescription);
+				auto pDescription = make_unique<char[]>( size+1 );
+				uint size2;
+				wcstombs_s( &size2, pDescription.get(), size+1, pszThreadDescription, size );
+				::LocalFree( pszThreadDescription );
+				std::strncpy( ThreadName, pDescription.get(), sizeof(ThreadName)/sizeof(ThreadName[0]) );
 			}
-			return ThreadName;
 		}
+		return ThreadName;
+	}
 }

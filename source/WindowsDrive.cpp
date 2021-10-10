@@ -5,12 +5,147 @@
 #include "../../Framework/source/DateTime.h"
 #define var const auto
 
-std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_shared<Jde::IO::Drive::WindowsDrive>(); }
+//std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_shared<Jde::IO::Drive::WindowsDrive>(); }
+namespace Jde
+{
+	IO::Drive::WindowsDrive _native;
+	α IO::Native()noexcept->IDrive&{ return _native; }
+}
+namespace Jde::IO
+{
+	α FileIOArg::Open()noexcept(false)->void
+	{
+		const DWORD access = IsRead ? GENERIC_READ : GENERIC_WRITE;
+		const DWORD sharing = IsRead ? FILE_SHARE_READ : 0;
+		const DWORD creationDisposition = IsRead ? OPEN_EXISTING : CREATE_ALWAYS;
+		const DWORD dwFlagsAndAttributes = IsRead ? FILE_FLAG_SEQUENTIAL_SCAN : FILE_ATTRIBUTE_ARCHIVE;
+		Handle = HandlePtr( WinHandle(::CreateFile((string("\\\\?\\")+Path.string()).c_str(), access, sharing, nullptr, creationDisposition, FILE_FLAG_OVERLAPPED | dwFlagsAndAttributes, nullptr), [&](){return IOException(move(Path), GetLastError(), "CreateFile");}) );
+		if( IsRead )
+		{
+			LARGE_INTEGER fileSize;
+			THROW_IF( !::GetFileSizeEx(Handle.get(), &fileSize), IOException(move(Path), GetLastError(), "GetFileSizeEx") );
+			std::visit( [fileSize](auto&& b){b->resize(fileSize.QuadPart);}, Buffer );
+		}
+	}
 
+	α OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )->void;
+	α Send( FileChunkArg& chunk )noexcept->void
+	{
+		//uint i = chunk.StartIndex();
+		uint endByteIndex = chunk.EndIndex;
+		chunk.Sent = true;
+		auto& arg = chunk.FileArg();
+		if( arg.IsRead )
+		{
+			RETURN_IF( !::ReadFileEx(arg.Handle.get(), chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
+		}
+		else
+		{
+			DBG( "Writing bytes {} - {}"sv, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
+			var h = arg.Handle.get();
+			RETURN_IF( !::WriteFileEx(h, chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
+		}
+		//Overlaps.emplace_back( move(pChunk) );
+	}
+
+	α OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )->void
+	{
+		static uint i=0;
+		try
+		{
+			THROW_IF( dwErrorCode!=ERROR_SUCCESS, IOException{"({})OverlappedCompletionRoutine - {}/{} - {}", i++, dwErrorCode, GetLastError(), dwNumberOfBytesTransfered} );//no pOverlapped
+			DBG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
+			FileChunkArg& chunk = *(FileChunkArg*)pOverlapped->hEvent;
+			FileIOArg& arg = chunk.FileArg();
+			auto& returnObject = arg.CoHandle.promise().get_return_object();
+			if( auto pp = find_if( arg.Chunks.begin(), arg.Chunks.end(), [](var& x){ return !x->Sent;} ); pp!=arg.Chunks.end() )
+				Send( dynamic_cast<FileChunkArg&>(**pp) );
+			else if( arg.Chunks.size()==1 )
+				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, arg.Buffer) );
+			if( returnObject.HasResult() )
+			{
+				WinDriveWorker::Remove( &arg );
+				Coroutine::CoroutinePool::Resume( move(arg.CoHandle) );
+			}
+			else if( auto p = find_if( arg.Chunks.begin(), arg.Chunks.end(), [pChunk=&chunk](var& x){ return x.get()==pChunk;} ); p!=arg.Chunks.end() )
+				arg.Chunks.erase( p );
+		}
+		catch( Exception& e )
+		{
+			e.Log();
+			//returnObject.SetResult( move(e) );
+		}
+		//DBG( "~OverlappedCompletionRoutine"sv );
+	}
+
+	α FileIOArg::Send( coroutine_handle<Task2::promise_type>&& h )noexcept->void
+	{
+		CoHandle = move( h );
+		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
+			Chunks.emplace_back( make_unique<FileChunkArg>(*this, i) );
+		
+		WinDriveWorker::Push( this );
+	}
+
+	sp<WinDriveWorker> _pInstance;
+	uint8 _threadCount{ std::numeric_limits<uint8>::max() };
+	uint _index{ 0 };
+	vector<uint> _indexes; atomic<bool> _indexMutex;
+/*	α WinDriveWorker::Start()noexcept->uint
+	{
+		if( !_pInstance )
+		{
+			if( _threadCount==std::numeric_limits<uint8>::max() )
+				_threadCount = Settings::TryGet<uint8>( "workers/drive/threads" ).value_or( 0 );
+			if( _threadCount )
+				IApplication::AddShutdown( _pInstance = make_shared<WinDriveWorker>() );
+		}
+		if( _pInstance )
+			_pInstance->WakeUp();
+		Threading::AtomicGuard l{ _indexMutex };
+		_indexes.push_back( _index );
+		return _index++;
+	}
+*/	
+	α WinDriveWorker::Poll()noexcept->optional<bool>
+	{
+		var newQueueItem = base::Poll().value();
+		Threading::AtomicGuard l{ _argMutex };
+		bool ioItem = _args.size();
+		if( ioItem )
+		{
+			l.unlock();
+			var sleepResult = ::SleepEx( 0, true );
+			ioItem = ioItem && sleepResult;
+		}
+		return newQueueItem || ioItem;
+	}
+
+	α WinDriveWorker::HandleRequest( FileIOArg*&& pArg )noexcept->void
+	{
+		Threading::AtomicGuard l{ _argMutex };
+		_args.emplace_back( pArg );
+		for( uint i=0; i<DriveWorker::ThreadSize(); ++i )
+			IO::Send( (FileChunkArg&)*pArg->Chunks[i] );
+
+//			auto pOverlap = make_unique<OVERLAPPED>(); pOverlap->Pointer = (PVOID)i; pOverlap->hEvent = (HANDLE)std::min( i+DriveWorker::ChunkSize(), size );
+	}
+	
+	void WinDriveWorker::Remove( FileIOArg* pArg )noexcept
+	{
+		if( auto pInstance=dynamic_pointer_cast<WinDriveWorker>(_pInstance); pInstance )
+		{
+			Threading::AtomicGuard l{ pInstance->_argMutex };
+			if( auto p = find(pInstance->_args.begin(), pInstance->_args.end(), pArg); p!=pInstance->_args.end() )
+				pInstance->_args.erase( p );
+			else
+				WARN( "Could not find arg." );
+		}
+	}
+}
 
 namespace Jde::IO::Drive
 {
-
 	std::wstring WindowsPath( const fs::path& path )
 	{
 		return std::wstring(L"\\\\?\\")+path.wstring();
@@ -129,7 +264,7 @@ namespace Jde::IO::Drive
 	{
 		THROW_IF( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), Exception("Creating symbolic link from '{}' to '{}' has failed - {}", from.string().c_str(), to.string().c_str(), GetLastError()) );
 	}
-
+	/*
 	TaskResult DriveAwaitable::await_resume()noexcept
 	{
 		base::AwaitResume();
@@ -164,40 +299,7 @@ namespace Jde::IO::Drive
 		DriveWorker::Push( move(_arg) );
 		//auto hPort = ::CreateIoCompletionPort( hFile, nullptr, 0, 0 );
 	}
-	void OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )
-	{
-		static uint i=0;
-		try
-		{
-			THROW_IF( dwErrorCode!=ERROR_SUCCESS, IOException{"({})OverlappedCompletionRoutine - {}/{} - {}", i++, dwErrorCode, GetLastError(), dwNumberOfBytesTransfered} );//no pOverlapped
-			DBG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
-			DriveArg* pArg = (DriveArg*)pOverlapped->hEvent;
-			auto& returnObject = pArg->CoHandle.promise().get_return_object();
-			if( auto p = find_if( pArg->Overlaps.begin(), pArg->Overlaps.end(), [pOverlapped](var& x){ return x.get()==pOverlapped;} ); p!=pArg->Overlaps.end() )
-				pArg->Overlaps.erase( p );
-			if( pArg->OverlapsOverflow.size() )
-			{
-				DBG( "OverlapsOverflow.size()={}"sv, pArg->OverlapsOverflow.size() );
-				auto pItem = move( pArg->OverlapsOverflow.front() );
-				pArg->OverlapsOverflow.erase( pArg->OverlapsOverflow.begin() );
-				pArg->Send( move(pItem) );
-			}
-			else if( pArg->Overlaps.empty() )
-				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, pArg->Buffer) );
-			if( returnObject.HasResult() )
-			{
-				Coroutine::CoroutinePool::Resume( move(pArg->CoHandle) );
-				DriveWorker::Remove( pArg );
-			}
-		}
-		catch( Exception& e )
-		{
-			e.Log();
-			//returnObject.SetResult( move(e) );
-		}
-		//DBG( "~OverlappedCompletionRoutine"sv );
-	}
-	bool DriveWorker::Poll()noexcept
+	α DriveWorker::Poll()noexcept->optional<bool>
 	{
 		var newQueueItem = base::Poll();
 		bool ioItem = Args.size();
@@ -208,6 +310,7 @@ namespace Jde::IO::Drive
 		}
 		return newQueueItem || ioItem;
 	}
+
 	void DriveWorker::Remove( DriveArg* x )noexcept
 	{
 		if( auto p=dynamic_pointer_cast<DriveWorker>(_pInstance); p )
@@ -231,22 +334,5 @@ namespace Jde::IO::Drive
 				pArg->OverlapsOverflow.emplace_back( move(pOverlap) );
 		}
 	}
-
-	void DriveArg::Send( up<::OVERLAPPED> pOverlap )noexcept
-	{
-		char* pData = std::visit( [](auto&& x){return x->data();}, Buffer );
-		var i = (DWORD)(size_t)pOverlap->Pointer;
-		const DWORD endByteIndex = (DWORD)(size_t)pOverlap->hEvent;
-		pOverlap->hEvent = this;
-		if( IsRead )
-		{
-			RETURN_IF( !::ReadFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}", Path.string(), GetLastError() );
-		}
-		else
-		{
-			DBG( "Writing bytes {} - {}"sv, i, std::min(i+DriveWorker::ChunkSize(), endByteIndex) );
-			RETURN_IF( !::WriteFileEx(FileHandle.get(), pData+i, endByteIndex-i, pOverlap.get(), OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}", Path.string(), GetLastError() );
-		}
-		Overlaps.emplace_back( move(pOverlap) );
-	}
+	*/
 }

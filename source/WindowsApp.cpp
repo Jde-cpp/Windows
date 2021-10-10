@@ -1,9 +1,14 @@
-#include <jde/App.h>
+﻿#include <jde/App.h>
 #include <Psapi.h>
+#include <shellapi.h>
+#include <strsafe.h>
 #include "../../Framework/source/threading/InterruptibleThread.h"
 #include "WindowsDrive.h"
 #include "WindowsSvc.h"
 #include "WindowsWorker.h"
+#include "WindowsUtilities.h"
+
+
 #define var const auto
 
 namespace Jde
@@ -26,7 +31,7 @@ namespace Jde
 
 	[[noreturn]] BOOL HandlerRoutine( DWORD  ctrlType )
 	{
-		Jde::GetDefaultLogger()->trace( "Caught signal %d", ctrlType );
+		TRACE( "Caught signal {}", ctrlType );
 		for( auto pThread : IApplication::GetBackgroundThreads() )
 			pThread->Interrupt();
 		for( auto pThread : IApplication::GetBackgroundThreads() )
@@ -64,7 +69,7 @@ namespace Jde
 
 		return hostname;
 	}
-	uint IApplication::ProcessId()noexcept
+	uint OSApp::ProcessId()noexcept
 	{
 		return _getpid();
 	}
@@ -74,18 +79,52 @@ namespace Jde
 		//TODO Implement
 	}
 	
-	sp<IO::IDrive> IApplication::DriveApi()noexcept
+/*	sp<IO::IDrive> OSApp::DriveApi()noexcept
 	{
 		return make_shared<IO::Drive::WindowsDrive>();
-	}
+	}*/
 	bool isService{false};
-	bool OSApp::AsService()noexcept
+	α OSApp::AsService()noexcept->bool 
 	{
 		isService = true;
 		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
 		return true;
 	}
-	void OSApp::OSPause()noexcept
+	
+	up<flat_map<string,string>> _pArgs;
+	α OSApp::Args()noexcept->flat_map<string,string>
+	{
+		if( !_pArgs )
+		{
+			_pArgs = make_unique<flat_map<string,string>>();
+			int nArgs;
+			LPWSTR* szArglist = ::CommandLineToArgvW( ::GetCommandLineW(), &nArgs );
+			if( !szArglist )
+				std::cerr << "CommandLineToArgvW failed\n";
+		   else 
+			{
+				auto p = _pArgs->try_emplace( {} );
+				for( uint i=0; i<nArgs; ++i ) 
+				{
+					var current = Windows::ToString( szArglist[i] );
+					if( current.starts_with('-') )
+						p = _pArgs->try_emplace( current );
+					else
+						p.first->second = current;
+				}
+			   LocalFree(szArglist);
+			}
+		}
+		return *_pArgs;
+	}
+	α OSApp::Executable()noexcept->fs::path
+	{
+		return fs::path{ Args().find( {} )->second };
+	}
+
+
+
+	α OSApp::Pause()noexcept->void
 	{
 		INFO( "Starting main thread loop...{}"sv, _getpid() );
 		if( isService )
@@ -98,7 +137,37 @@ namespace Jde
 		else
 			Windows::WindowsWorkerMain::Start( false );
 	}
-	string OSApp::GetEnvironmentVariable( sv variable )noexcept
+	string _companyName;
+	α OSApp::CompanyName()noexcept->string
+	{
+		if(! _companyName.size() )
+		{
+			try
+			{
+				DWORD dummy;
+				var exe = Executable().string();
+				var size = ::GetFileVersionInfoSize( exe.c_str(), &dummy ); CHECK( size );
+				vector<BYTE> block( size );
+				CHECK( ::GetFileVersionInfo(exe.c_str(), dummy, size, block.data()) );
+				struct LANGANDCODEPAGE { WORD wLanguage; WORD wCodePage; } *lpTranslate; UINT cbTranslate;
+				::VerQueryValue( block.data(), TEXT("\\VarFileInfo\\Translation"), (LPVOID*)&lpTranslate, &cbTranslate ); CHECK( (cbTranslate/sizeof(struct LANGANDCODEPAGE)) );
+				char name[50];
+				CHECK( SUCCEEDED(::StringCchPrintf(name, sizeof(name), TEXT("\\StringFileInfo\\%04x%04x\\CompanyName"),  lpTranslate[0].wLanguage, lpTranslate[0].wCodePage)) );
+				char* pCompanyName; UINT bytes;
+				::VerQueryValue( block.data(),  name, (LPVOID*)&pCompanyName, &bytes );
+				_companyName = sv{ pCompanyName, bytes-1 };
+			}
+			catch( Exception& )
+			{
+				_companyName = "Jde-cpp";
+			}
+		}
+		return _companyName;
+	}
+
+	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
+
+	α OSApp::GetEnvironmentVariable( sv variable )noexcept->string
 	{
 		char buffer[32767];
 		string result;
@@ -131,7 +200,8 @@ namespace Jde
 		}
 		return schSCManager;
 	}
-	void OSApp::Install( string serviceDescription )noexcept(false)
+
+	α OSApp::Install( str serviceDescription )noexcept(false)->void
 	{
 		auto schSCManager = MyOpenSCManager();
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
@@ -150,7 +220,7 @@ namespace Jde
 		}
 		INFO( "service '{}' installed successfully"sv, serviceName );
 	}
-	void OSApp::Uninstall()noexcept(false)
+	α OSApp::Uninstall()noexcept(false)->void
 	{
 		auto manager = MyOpenSCManager();
 		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
