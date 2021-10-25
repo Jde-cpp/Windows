@@ -5,17 +5,20 @@ namespace Jde
 {
    struct WinHandle 
    {
-       WinHandle( std::nullptr_t=nullptr ) : _value(nullptr) {}
-       WinHandle( HANDLE value, function<Exception()> e )noexcept:_value( value )
+       WinHandle( std::nullptr_t=nullptr )noexcept : _value(nullptr) {}
+       WinHandle( HANDLE value, function<IOException()> e )noexcept(false):
+          _value( value )
        {
-			THROW_IF( _value==INVALID_HANDLE_VALUE, e() );
+          if( _value==INVALID_HANDLE_VALUE )
+          {
+             auto e2 = e();
+             throw e2;
+          }
+          
        }
 
        explicit operator bool() const { return _value != nullptr && _value != INVALID_HANDLE_VALUE; }
        operator HANDLE() const { return _value; }
-
-       //friend bool operator ==(WinHandle l, WinHandle r) { return l.value_ == r.value_; }
-       //friend bool operator !=(WinHandle l, WinHandle r) { return !(l == r); }
 
       struct Deleter 
       {
@@ -26,8 +29,4 @@ namespace Jde
       HANDLE _value;
    };
    using HandlePtr=unique_ptr<WinHandle, WinHandle::Deleter>;
-   //inline bool operator ==(HANDLE l, WinHandle r) { return WinHandle(l) == r; }
-   //inline bool operator !=(HANDLE l, WinHandle r) { return !(l == r); }
-   //inline bool operator ==(WinHandle l, HANDLE r) { return l == WinHandle(r); }
-   //inline bool operator !=(WinHandle l, HANDLE r) { return !(l == r); }
 }

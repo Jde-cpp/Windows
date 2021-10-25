@@ -33,13 +33,13 @@ namespace Jde::Windows
 		α MainLoop()noexcept->optional<DWORD>;
 		α Loop()noexcept->DWORD;
 		virtual α HandleEvent( Event&& e )noexcept->void;
+		HANDLE _eventQueue;
 		HANDLE _eventStop;
 		sp<WindowsWorker> _pKeepAlive;
 		atomic<TimePoint> _stop;
 		vector<CoEvent> _coroutines;
 		vector<HANDLE> _objects;
 		QueueMove<Event> _queue;
-		HANDLE _eventQueue;
 	private:
 		α AddInternalEvents()noexcept->void{ _objects.push_back( _eventQueue );  _objects.push_back( _eventStop ); if( _eventWorker ) _objects.push_back( _eventWorker ); }
 		constexpr virtual uint MaxEvents()noexcept{return MAXIMUM_WAIT_OBJECTS-2; }
@@ -54,12 +54,9 @@ namespace Jde::Windows
 
 	struct WindowsWorkerMain final: WindowsWorker
 	{
-		//WindowsWorker()=default;
-		//~WindowsWorkerMain(){ DBG("~WindowsWorker"sv); }
-		
-		JDE_NATIVE_VISIBILITY Ω Push( coroutine_handle<>&& h, HANDLE hEvent, bool close=true )noexcept->void;
-		JDE_NATIVE_VISIBILITY Ω Start( optional<bool> service )noexcept->void;
-		JDE_NATIVE_VISIBILITY Ω Stop()noexcept->void;
+		Γ Ω Push( coroutine_handle<>&& h, HANDLE hEvent, bool close=true )noexcept->void;
+		Γ Ω Start( optional<bool> service )noexcept->void;
+		Γ Ω Stop()noexcept->void;
 	private:
 		WindowsWorkerMain( bool runOnMainThread )noexcept;
 		vector<sp<WindowsWorker>> _workerBuffers;

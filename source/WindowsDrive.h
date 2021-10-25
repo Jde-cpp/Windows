@@ -30,7 +30,7 @@ namespace Jde::IO
 	struct WinDriveWorker : Threading::IQueueWorker<FileIOArg*,WinDriveWorker>
 	{
 		using base=IQueueWorker<FileIOArg*,WinDriveWorker>;
-		WinDriveWorker():base{"drive"}{}
+		WinDriveWorker():base{}{}
 		//~DriveWorker(){ DBG("~DriveWorker"sv); }
 		//α HandleRequest( DriveArg&& x )noexcept->void override;
 		Ω Remove( FileIOArg* pArg )noexcept->void;
@@ -38,6 +38,9 @@ namespace Jde::IO
 		α Poll()noexcept->optional<bool> override;
 		α HandleRequest( FileIOArg*&& x )noexcept->void override;
 		α SetWorker( FileIOArg*& p )noexcept->void override{ p->SetWorker( shared_from_this() ); }
+		α Shutdown()noexcept->void override{}
+		static constexpr sv Name{ "drive" };
+
 	private:
 		vector<FileIOArg*> _args; atomic<bool> _argMutex;
 	};
@@ -95,17 +98,17 @@ namespace Jde::IO::Drive
 		DriveArg _arg;
 	};
 	*/
-	struct JDE_NATIVE_VISIBILITY WindowsDrive final : IDrive//TODO remove JDE_NATIVE_VISIBILITY
+	struct Γ WindowsDrive final : IDrive//TODO remove Γ
 	{
 		IDirEntryPtr Get( const fs::path& path )noexcept(false) override;
 		map<string,IDirEntryPtr> Recursive( const fs::path& dir )noexcept(false) override;
 		IDirEntryPtr Save( const fs::path& path, const vector<char>& bytes, const IDirEntry& dirEntry )noexcept(false) override;
 		IDirEntryPtr CreateFolder( const fs::path& path, const IDirEntry& dirEntry )noexcept(false) override;
-		void Remove( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
-		void Trash( const fs::path& /*path*/ ){THROW( Exception("Not Implemented") );}
-		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( Exception("Not Implemented") );}
+		void Remove( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
+		void Trash( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
+		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( "Not Implemented" );}
 		VectorPtr<char> Load( const IDirEntry& dirEntry )noexcept(false) override;
-		void Restore( sv )noexcept(false)override{ THROW(Exception("Not Implemented")); }
+		void Restore( sv )noexcept(false)override{ THROW("Not Implemented"); }
 		void SoftLink( path from, path to )noexcept(false)override;
 		//DriveAwaitable Read( fs::path&& path, bool vector=true )noexcept{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
 		//DriveAwaitable Write( fs::path&& path, sp<vector<char>> data )noexcept{ return DriveAwaitable{move(path), data, shared_from_this()}; }

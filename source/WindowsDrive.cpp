@@ -5,7 +5,6 @@
 #include "../../Framework/source/DateTime.h"
 #define var const auto
 
-//std::shared_ptr<Jde::IO::IDrive> Jde::IO::LoadNativeDrive(){ return std::make_shared<Jde::IO::Drive::WindowsDrive>(); }
 namespace Jde
 {
 	IO::Drive::WindowsDrive _native;
@@ -22,8 +21,8 @@ namespace Jde::IO
 		Handle = HandlePtr( WinHandle(::CreateFile((string("\\\\?\\")+Path.string()).c_str(), access, sharing, nullptr, creationDisposition, FILE_FLAG_OVERLAPPED | dwFlagsAndAttributes, nullptr), [&](){return IOException(move(Path), GetLastError(), "CreateFile");}) );
 		if( IsRead )
 		{
-			LARGE_INTEGER fileSize;
-			THROW_IF( !::GetFileSizeEx(Handle.get(), &fileSize), IOException(move(Path), GetLastError(), "GetFileSizeEx") );
+			LARGE_INTEGER fileSize; 
+			THROW_IFX( !::GetFileSizeEx(Handle.get(), &fileSize), IOException(move(Path), GetLastError(), "GetFileSizeEx") );
 			std::visit( [fileSize](auto&& b){b->resize(fileSize.QuadPart);}, Buffer );
 		}
 	}
@@ -37,7 +36,7 @@ namespace Jde::IO
 		auto& arg = chunk.FileArg();
 		if( arg.IsRead )
 		{
-			RETURN_IF( !::ReadFileEx(arg.Handle.get(), chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
+			RETURN_IF( !::ReadFileEx(arg.Handle.get(), chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "ReadFileEx({}) returned false - {}", arg.Path.string().c_str(), GetLastError() );
 		}
 		else
 		{
@@ -53,8 +52,7 @@ namespace Jde::IO
 		static uint i=0;
 		try
 		{
-			THROW_IF( dwErrorCode!=ERROR_SUCCESS, IOException{"({})OverlappedCompletionRoutine - {}/{} - {}", i++, dwErrorCode, GetLastError(), dwNumberOfBytesTransfered} );//no pOverlapped
-			DBG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
+			THROW_IFX( dwErrorCode!=ERROR_SUCCESS, OSException(dwErrorCode, format("#{} - OverlappedCompletionRoutine xfered='{}'", i++, dwNumberOfBytesTransfered)) );//no pOverlapped
 			FileChunkArg& chunk = *(FileChunkArg*)pOverlapped->hEvent;
 			FileIOArg& arg = chunk.FileArg();
 			auto& returnObject = arg.CoHandle.promise().get_return_object();
@@ -64,17 +62,15 @@ namespace Jde::IO
 				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, arg.Buffer) );
 			if( returnObject.HasResult() )
 			{
+				DBG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
 				WinDriveWorker::Remove( &arg );
 				Coroutine::CoroutinePool::Resume( move(arg.CoHandle) );
 			}
 			else if( auto p = find_if( arg.Chunks.begin(), arg.Chunks.end(), [pChunk=&chunk](var& x){ return x.get()==pChunk;} ); p!=arg.Chunks.end() )
 				arg.Chunks.erase( p );
 		}
-		catch( Exception& e )
-		{
-			e.Log();
-			//returnObject.SetResult( move(e) );
-		}
+		catch( IException&  )
+		{}
 		//DBG( "~OverlappedCompletionRoutine"sv );
 	}
 
@@ -107,6 +103,7 @@ namespace Jde::IO
 		return _index++;
 	}
 */	
+	Duration _keepAlive = Settings::TryGet<Duration>( "workers/drive/keepalive" ).value_or( 5s );
 	α WinDriveWorker::Poll()noexcept->optional<bool>
 	{
 		var newQueueItem = base::Poll().value();
@@ -118,17 +115,18 @@ namespace Jde::IO
 			var sleepResult = ::SleepEx( 0, true );
 			ioItem = ioItem && sleepResult;
 		}
-		return newQueueItem || ioItem;
+		var result = newQueueItem || ioItem;
+		if( result )
+			_lastRequest = Clock::now();
+		return result ? result : _lastRequest.load()+_keepAlive>Clock::now() ? optional<bool>{ false } : std::nullopt;
 	}
 
 	α WinDriveWorker::HandleRequest( FileIOArg*&& pArg )noexcept->void
 	{
 		Threading::AtomicGuard l{ _argMutex };
 		_args.emplace_back( pArg );
-		for( uint i=0; i<DriveWorker::ThreadSize(); ++i )
+		for( uint i=0; i<std::min<uint8>((uint8)pArg->Chunks.size(), DriveWorker::ThreadSize()); ++i )
 			IO::Send( (FileChunkArg&)*pArg->Chunks[i] );
-
-//			auto pOverlap = make_unique<OVERLAPPED>(); pOverlap->Pointer = (PVOID)i; pOverlap->hEvent = (HANDLE)std::min( i+DriveWorker::ChunkSize(), size );
 	}
 	
 	void WinDriveWorker::Remove( FileIOArg* pArg )noexcept
@@ -142,6 +140,12 @@ namespace Jde::IO
 				WARN( "Could not find arg." );
 		}
 	}
+
+	α DriveAwaitable::await_resume()noexcept->TaskResult
+	{
+		base::AwaitResume();
+		return _pPromise ? TaskResult{ _pPromise->get_return_object().GetResult() } : TaskResult{ ExceptionPtr };
+	}
 }
 
 namespace Jde::IO::Drive
@@ -153,8 +157,7 @@ namespace Jde::IO::Drive
 	WIN32_FILE_ATTRIBUTE_DATA GetInfo( const fs::path& path )noexcept(false)
 	{
 		WIN32_FILE_ATTRIBUTE_DATA fInfo;
-		if( !GetFileAttributesExW(WindowsPath(path).c_str(), GetFileExInfoStandard, &fInfo) )
-			THROW( IOException("Could not get file attributes for:  '{}' - '{}'.", path.string(), GetLastError()) );
+		THROW_IFX( !GetFileAttributesExW(WindowsPath(path).c_str(), GetFileExInfoStandard, &fInfo), IOException(path, "Could not get file attributes:   '{}'.", GetLastError()) );
 		return fInfo;
 	}
 
@@ -175,10 +178,9 @@ namespace Jde::IO::Drive
 		}
 	};
 
-	map<string,IDirEntryPtr>  WindowsDrive::Recursive( const fs::path& dir )noexcept(false)
+	map<string,IDirEntryPtr>  WindowsDrive::Recursive( path dir )noexcept(false)
 	{
-		if( !fs::exists(dir) )
-			THROW( IOException( "'{}' does not exist.", dir) );
+		CHECK_FILE_EXISTS( dir );
 		var dirString = dir.string();
 		map<string,IDirEntryPtr> entries;
 
@@ -224,16 +226,12 @@ namespace Jde::IO::Drive
 
 	IDirEntryPtr WindowsDrive::CreateFolder( const fs::path& dir, const IDirEntry& dirEntry )noexcept(false)
 	{
-		if( !CreateDirectory(dir.string().c_str(), nullptr) )
-			THROW( IOException( "Could not create '{}' - {}.", dir, GetLastError()) );
+		THROW_IFX( !CreateDirectory(dir.string().c_str(), nullptr), IOException(dir, "Could not create - {}.", GetLastError()) );
 		if( dirEntry.CreatedTime.time_since_epoch()!=Duration::zero() )
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
-			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
-			if( hFile==INVALID_HANDLE_VALUE )
-				THROW( IOException( "Could not create '{}' - {}."sv, dir, GetLastError()) );
-			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
-				WARN( "Could not update dir times '{}' - {}."sv, dir, GetLastError() );
+			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );  THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(dir, "Could not create - {}."sv, GetLastError()) );
+			LOG_IF( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime), ELogLevel::Warning, "Could not update dir times '{}' - {}.", dir.string(), GetLastError() );
 			CloseHandle( hFile );
 		}
 		return make_shared<DirEntry>( dir );
@@ -245,8 +243,7 @@ namespace Jde::IO::Drive
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
 			auto hFile = CreateFileW( WindowsPath(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
-			if( hFile==INVALID_HANDLE_VALUE )
-				THROW( IOException("Could not create '{}' - {}."sv, path.string(), GetLastError()) );
+			THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(path, "Could not create - {}."sv, GetLastError()) );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
 				WARN( "Could not update file times '{}' - {}."sv, path.string(), GetLastError() );
 			CloseHandle( hFile );
@@ -262,8 +259,9 @@ namespace Jde::IO::Drive
 
 	void WindowsDrive::SoftLink( path from, path to )noexcept(false)
 	{
-		THROW_IF( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), Exception("Creating symbolic link from '{}' to '{}' has failed - {}", from.string().c_str(), to.string().c_str(), GetLastError()) );
+		THROW_IFX( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), IOException(from, "Creating symbolic link from to '{}' has failed - {}", to.string().c_str(), GetLastError()) );
 	}
+	
 	/*
 	TaskResult DriveAwaitable::await_resume()noexcept
 	{

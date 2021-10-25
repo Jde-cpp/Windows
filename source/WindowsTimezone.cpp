@@ -22,17 +22,17 @@ namespace Jde::Timezone
 				break;
 		}
 		if( result!=ERROR_SUCCESS )
-			THROW( Exception("Could not find timezone '{}'", ciName.c_str()) );
+			THROW( "Could not find timezone '{}'", ciName.c_str() );
 
 		DateTime myTime{utc};
 		TIME_ZONE_INFORMATION tz;
 		if( !GetTimeZoneInformationForYear(static_cast<USHORT>(myTime.Year()), &dynamicTimezone, &tz) )
-			THROW( Exception("GetTimeZoneInformationForYear failed '{}'", GetLastError()) );
+			THROW( "GetTimeZoneInformationForYear failed '{}'", GetLastError() );
 
 		var systemTime =  Windows::ToSystemTime( utc );
 		SYSTEMTIME localTime;
 		if( !SystemTimeToTzSpecificLocalTime(&tz, &systemTime, &localTime) )
-			THROW( Exception("SystemTimeToTzSpecificLocalTime failed - {}", GetLastError()) );
+			THROW( "SystemTimeToTzSpecificLocalTime failed - {}", GetLastError() );
 
 		return Windows::ToTimePoint( localTime )-Windows::ToTimePoint( systemTime );
 	}

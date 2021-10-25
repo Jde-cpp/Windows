@@ -11,7 +11,7 @@ namespace Jde::Windows
 	up<WindowsWorkerMain> WindowsWorkerMain::_pInstance;
 
 #define CREATE_EVENT ::CreateEvent(nullptr, TRUE, FALSE, nullptr)
-#define WORKER_INIT _eventStop{ CREATE_EVENT },  _eventQueue{ CREATE_EVENT }
+#define WORKER_INIT _eventQueue{ CREATE_EVENT }, _eventStop{ CREATE_EVENT }
 
 	WindowsWorker::WindowsWorker( bool runOnMainThread )noexcept:
 		WORKER_INIT,
@@ -93,7 +93,15 @@ namespace Jde::Windows
 		DWORD waitResult;
 		for( ;; )
 		{
+			TAG( "threads", "WaitForMultipleObjects" );
 			waitResult = ::WaitForMultipleObjects( (DWORD)_objects.size(), _objects.data(), FALSE, INFINITE );
+			TAG( "threads", "WaitForMultipleObjects - returned {}", waitResult );
+			if( waitResult==1 )//_eventStop
+			{
+				LOG_IF( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
+				break;
+			}
+			ASSERT( false );//not sure of use case here.
 			if( waitResult<_coroutines.size() )
 			{
 				auto pCoroutine = _coroutines.begin() + waitResult;
@@ -153,11 +161,10 @@ namespace Jde::Windows
 
 	α WindowsWorkerMain::Start( optional<bool> pService )noexcept->void
 	{
-		ASSERT( !_pInstance );
 		var runOnMainThread = pService.has_value();
 		var service = runOnMainThread && *pService;
-
-		_pInstance = up<WindowsWorkerMain>( new WindowsWorkerMain(runOnMainThread) );
+		if( !_pInstance )
+			_pInstance = up<WindowsWorkerMain>( new WindowsWorkerMain{runOnMainThread} );
 		if( service )
 			Service::ReportStatus( SERVICE_RUNNING, NO_ERROR, 0 );
 		if( runOnMainThread )
@@ -171,6 +178,11 @@ namespace Jde::Windows
 	α WindowsWorkerMain::Stop()noexcept->void
 	{
 		if( _pInstance )
+		{
+			TAG( "threads", "Stopping" );
 			LOG_IF( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
+		}
+		else
+			TAG( "threads", "Stopping but no instance" );
 	}
 }

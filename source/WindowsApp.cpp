@@ -57,15 +57,13 @@ namespace Jde
 	}
 	fs::path IApplication::Path()noexcept
 	{
-		//char* szExeFileName[MAX_PATH]; 
-		//::GetModuleFileNameA( NULL, (char*)szExeFileName, MAX_PATH );
 		return fs::path( _pgmptr );
 	}
 	string IApplication::HostName()noexcept
 	{
 		DWORD maxHostName = 1024;
 		char hostname[1024];
-		THROW_IF( !::GetComputerNameA(hostname, &maxHostName), Exception("GetComputerNameA failed") );
+		THROW_IF( !::GetComputerNameA(hostname, &maxHostName), "GetComputerNameA failed" );
 
 		return hostname;
 	}
@@ -79,10 +77,6 @@ namespace Jde
 		//TODO Implement
 	}
 	
-/*	sp<IO::IDrive> OSApp::DriveApi()noexcept
-	{
-		return make_shared<IO::Drive::WindowsDrive>();
-	}*/
 	bool isService{false};
 	α OSApp::AsService()noexcept->bool 
 	{
@@ -122,7 +116,10 @@ namespace Jde
 		return fs::path{ Args().find( {} )->second };
 	}
 
-
+	α OSApp::UnPause()noexcept->void
+	{
+		Windows::WindowsWorkerMain::Stop();
+	}
 
 	α OSApp::Pause()noexcept->void
 	{
@@ -157,7 +154,7 @@ namespace Jde
 				::VerQueryValue( block.data(),  name, (LPVOID*)&pCompanyName, &bytes );
 				_companyName = sv{ pCompanyName, bytes-1 };
 			}
-			catch( Exception& )
+			catch( IException& )
 			{
 				_companyName = "Jde-cpp";
 			}
@@ -192,12 +189,8 @@ namespace Jde
 
 	ServiceHandle MyOpenSCManager()noexcept(false)
 	{
-		auto schSCManager = ServiceHandle{ ::OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS) }; THROW_IF( schSCManager.get()==nullptr,  );
-		if( !schSCManager.get() )
-		{
-			var error = ::GetLastError();
-			THROW( Exception(error==ERROR_ACCESS_DENIED ? "installation requires administrative privliges." : format("OpenSCManager failed - {}", error)) );
-		}
+		auto schSCManager = ServiceHandle{ ::OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS) };
+		THROW_IF( !schSCManager.get(), ::GetLastError()==ERROR_ACCESS_DENIED ? "installation requires administrative privliges." : format("OpenSCManager failed - {}", ::GetLastError()) );
 		return schSCManager;
 	}
 
@@ -207,11 +200,7 @@ namespace Jde
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
 		const string serviceName{ ApplicationName() };
 		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, Path().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
-		if( !service.get() )
-		{
-			var error = ::GetLastError();
-			THROW( Exception(error==ERROR_SERVICE_EXISTS ? "Service allready exists." : format("CreateService failed - {}", error)) );
-		}
+		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_EXISTS ? "Service allready exists." : format("CreateService failed - {}", ::GetLastError()) );
 		if( serviceDescription.size() )
 		{
 			SERVICE_DESCRIPTION d{ (LPSTR)serviceDescription.c_str() };
@@ -224,13 +213,24 @@ namespace Jde
 	{
 		auto manager = MyOpenSCManager();
 		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
-		if( !service.get() )
-		{
-			var error = ::GetLastError();
-			THROW( Exception(error==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService '{}' failed - {}", error)) );
-		}
+		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService '{}' failed - {}", ::GetLastError()) );
 		THROW_IF( !::DeleteService(service.get()), "DeleteService failed" );
 
 		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
+	}
+	α OSApp::LoadLibrary( path path )noexcept(false)->void*
+	{
+		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException("Can not load library '{}' - '{:x}'", path.string(), GetLastError()) );
+		INFO( "({})Opened"sv, path.string() );
+		return p;
+	}
+	α OSApp::FreeLibrary( void* p )noexcept->void
+	{
+		::FreeLibrary( (HMODULE)p );
+	}
+	α OSApp::GetProcAddress( void* pModule, str procName )noexcept(false)->void*
+	{
+		auto p = ::GetProcAddress( (HMODULE)pModule, procName.c_str() ); CHECK( p );
+		return p;
 	}
 }
