@@ -25,9 +25,9 @@ namespace Jde
 		HMODULE hKernelBase = GetModuleHandleA("KernelBase.dll");
 		RETURN_IF( !hKernelBase, "FATAL: failed to get kernel32.dll module handle, error:  {}", ::GetLastError() );
 		pSetThreadDescription = reinterpret_cast<TSetThreadDescription>( ::GetProcAddress(hKernelBase, "SetThreadDescription") );
-		LOG_IF( !pSetThreadDescription, ELogLevel::Error, "FATAL: failed to get SetThreadDescription() address, error:  {}", ::GetLastError() );
+		LOG_IFL( !pSetThreadDescription, ELogLevel::Error, "FATAL: failed to get SetThreadDescription() address, error:  {}", ::GetLastError() );
 		pGetThreadDescription = reinterpret_cast<TGetThreadDescription>( ::GetProcAddress(hKernelBase, "GetThreadDescription") );
-		LOG_IF( !pGetThreadDescription, ELogLevel::Error, "FATAL: failed to get GetThreadDescription() address, error:  {}", ::GetLastError() );
+		LOG_IFL( !pGetThreadDescription, ELogLevel::Error, "FATAL: failed to get GetThreadDescription() address, error:  {}", ::GetLastError() );
 	}
 	void SetThreadName( HANDLE h, const char* ansiDescription )noexcept
 	{
@@ -47,7 +47,7 @@ namespace Jde
 		::MultiByteToWideChar( CP_UTF8, 0, ansiDescription.data(), -1, wc.data(), count );
 		if( !pSetThreadDescription )
 			Initialize();
-		LOG_IF( pSetThreadDescription && FAILED((*pSetThreadDescription)(h, wc.data())), ELogLevel::Error, "Could not set name for thread({}) {} - (hr) - {} ", ansiDescription, h, ::GetLastError() );
+		LOG_IFL( pSetThreadDescription && FAILED((*pSetThreadDescription)(h, wc.data())), ELogLevel::Error, "Could not set name for thread({}) {} - (hr) - {} ", ansiDescription, h, ::GetLastError() );
 
 		SetThreadName( h, string{ansiDescription}.c_str() );
 	}

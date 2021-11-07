@@ -19,7 +19,6 @@ namespace Jde::IO
 			Bytes{ EndIndex-Overlap.Offset }
 		{ 
 		}
-		//~FileChunkArg(){ DBG("~FileChunkArg"); }
 		α Buffer(){ return FileArg().Data()+(size_t)Overlap.Pointer; }
 		α StartIndex(){ return (uint)Overlap.Pointer; }
 		uint EndIndex;
@@ -31,10 +30,7 @@ namespace Jde::IO
 	{
 		using base=IQueueWorker<FileIOArg*,WinDriveWorker>;
 		WinDriveWorker():base{}{}
-		//~DriveWorker(){ DBG("~DriveWorker"sv); }
-		//α HandleRequest( DriveArg&& x )noexcept->void override;
 		Ω Remove( FileIOArg* pArg )noexcept->void;
-		//Ω Start()noexcept->uint;
 		α Poll()noexcept->optional<bool> override;
 		α HandleRequest( FileIOArg*&& x )noexcept->void override;
 		α SetWorker( FileIOArg*& p )noexcept->void override{ p->SetWorker( shared_from_this() ); }
@@ -42,7 +38,7 @@ namespace Jde::IO
 		static constexpr sv Name{ "drive" };
 
 	private:
-		vector<FileIOArg*> _args; atomic<bool> _argMutex;
+		vector<FileIOArg*> _args; std::atomic_flag _argMutex;
 	};
 }
 namespace Jde::IO::Drive

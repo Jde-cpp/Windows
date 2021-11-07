@@ -25,9 +25,7 @@ namespace Jde::Windows
 	{}
 
 	void WindowsWorker::Stop()noexcept
-	{
-		//TODO work on sub stop.	
-	}
+	{}
 
 	α WindowsWorkerMain::Push( coroutine_handle<>&& h, HANDLE hEvent, bool close )noexcept->void
 	{
@@ -35,18 +33,18 @@ namespace Jde::Windows
 		if( _pInstance )
 		{
 			_pInstance->_queue.Push( {{move(h), close}, hEvent} );
-			LOG_IF( !::SetEvent(_pInstance->_eventQueue), ELogLevel::Error, "SetEvent returned false" );
+			LOG_IFL( !::SetEvent(_pInstance->_eventQueue), ELogLevel::Error, "SetEvent returned false" );
 		}
 	}
 
 	α WindowsWorker::SubPush( Event& e )noexcept->bool
 	{
-		Threading::AtomicGuard l{ _lock };
+		AtomicGuard l{ _lock };
 		var set = !Stopped() && _queue.size()+_coroutines.size()<MaxEvents();
 		if( set )
 		{
 			_queue.Push( move(e) );
-			LOG_IF( !::SetEvent(_eventQueue), ELogLevel::Error, "SetEvent returned false" );
+			LOG_IFL( !::SetEvent(_eventQueue), ELogLevel::Error, "SetEvent returned false" );
 		}
 		return set;
 	}
@@ -86,19 +84,19 @@ namespace Jde::Windows
 	{
 		for( auto pp = _workerBuffers.begin(); pp!=_workerBuffers.end(); pp = (*pp)->Stopped() ? _workerBuffers.erase(pp) : next(pp) );
 	}
-
+	static var _logLevel{ Logging::TagLevel("threads") };
 	DWORD WindowsWorker::Loop()noexcept
 	{
 		PreLoop();
 		DWORD waitResult;
 		for( ;; )
 		{
-			TAG( "threads", "WaitForMultipleObjects" );
+			LOG( "WaitForMultipleObjects" );
 			waitResult = ::WaitForMultipleObjects( (DWORD)_objects.size(), _objects.data(), FALSE, INFINITE );
-			TAG( "threads", "WaitForMultipleObjects - returned {}", waitResult );
+			LOG( "WaitForMultipleObjects - returned {}", waitResult );
 			if( waitResult==1 )//_eventStop
 			{
-				LOG_IF( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
+				LOG_IFL( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
 				break;
 			}
 			ASSERT( false );//not sure of use case here.
@@ -116,7 +114,7 @@ namespace Jde::Windows
 				_coroutines.erase( pCoroutine );
 				if( !IsMainThread() )
 				{
-					Threading::AtomicGuard l{ _lock };
+					AtomicGuard l{ _lock };
 					if( _queue.size()+_coroutines.size()==0 )
 					{
 						_stop = Clock::now();
@@ -126,7 +124,7 @@ namespace Jde::Windows
 			}
 			else if( waitResult==_coroutines.size() )
 			{
-				LOG_IF( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
+				LOG_IFL( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
 				vector<Event> events = _queue.PopAll();
 				for( auto& e : events )
 					HandleEvent( move(e) );
@@ -179,10 +177,10 @@ namespace Jde::Windows
 	{
 		if( _pInstance )
 		{
-			TAG( "threads", "Stopping" );
-			LOG_IF( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
+			LOG( "Stopping" );
+			LOG_IFL( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
 		}
 		else
-			TAG( "threads", "Stopping but no instance" );
+			LOG( "Stopping but no instance" );
 	}
 }

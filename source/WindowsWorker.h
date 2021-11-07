@@ -32,7 +32,7 @@ namespace Jde::Windows
 		α PreLoop()noexcept{ _coroutines.reserve( MAXIMUM_WAIT_OBJECTS ); _objects.reserve( MAXIMUM_WAIT_OBJECTS ); AddInternalEvents(); }
 		α MainLoop()noexcept->optional<DWORD>;
 		α Loop()noexcept->DWORD;
-		virtual α HandleEvent( Event&& e )noexcept->void;
+		β HandleEvent( Event&& e )noexcept->void;
 		HANDLE _eventQueue;
 		HANDLE _eventStop;
 		sp<WindowsWorker> _pKeepAlive;
@@ -43,12 +43,12 @@ namespace Jde::Windows
 	private:
 		α AddInternalEvents()noexcept->void{ _objects.push_back( _eventQueue );  _objects.push_back( _eventStop ); if( _eventWorker ) _objects.push_back( _eventWorker ); }
 		constexpr virtual uint MaxEvents()noexcept{return MAXIMUM_WAIT_OBJECTS-2; }
-		virtual α HandleWorkerEvent()noexcept->void{ ASSERT(false); }
+		β HandleWorkerEvent()noexcept->void{ ASSERT(false); }
 		α IsMainThread()const noexcept{ return _eventWorker!=nullptr; }
 		Duration _shutdownWait{5s};
 		HANDLE _eventWorker{ nullptr };
 		up<jthread> _pThread;//3rd class...
-		atomic<bool> _lock{false};
+		std::atomic_flag _lock;
 
 	};
 

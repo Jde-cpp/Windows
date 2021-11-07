@@ -13,7 +13,7 @@
 
 namespace Jde
 {
-	set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )noexcept(false)
+	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )noexcept(false)
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
 		return IApplication::_pInstance->BaseStartup( argc, argv, appName, serviceDescription );	
@@ -42,7 +42,7 @@ namespace Jde
 	void AddSignals2()noexcept(false)
 	{
 		if( !SetConsoleCtrlHandler(HandlerRoutine, TRUE) )
-			THROW( EnvironmentException("Could not set control handler") );
+			THROW( "Could not set control handler" );
 	}
 	void OSApp::AddSignals()noexcept(false)
 	{
@@ -52,7 +52,7 @@ namespace Jde
 	size_t IApplication::MemorySize()noexcept
 	{
 		PROCESS_MEMORY_COUNTERS memCounter;
-		/*BOOL result =*/ GetProcessMemoryInfo( ::GetCurrentProcess(), &memCounter, sizeof( memCounter ) );
+		/*BOOL result =*/ ::GetProcessMemoryInfo( ::GetCurrentProcess(), &memCounter, sizeof(memCounter) );
 		return memCounter.WorkingSetSize;
 	}
 	fs::path IApplication::Path()noexcept
@@ -220,7 +220,7 @@ namespace Jde
 	}
 	α OSApp::LoadLibrary( path path )noexcept(false)->void*
 	{
-		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException("Can not load library '{}' - '{:x}'", path.string(), GetLastError()) );
+		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException(path, GetLastError(), "Can not load library") );
 		INFO( "({})Opened"sv, path.string() );
 		return p;
 	}

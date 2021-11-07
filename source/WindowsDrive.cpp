@@ -86,7 +86,7 @@ namespace Jde::IO
 	sp<WinDriveWorker> _pInstance;
 	uint8 _threadCount{ std::numeric_limits<uint8>::max() };
 	uint _index{ 0 };
-	vector<uint> _indexes; atomic<bool> _indexMutex;
+	vector<uint> _indexes; std::atomic_flag _indexMutex;
 /*	α WinDriveWorker::Start()noexcept->uint
 	{
 		if( !_pInstance )
@@ -98,7 +98,7 @@ namespace Jde::IO
 		}
 		if( _pInstance )
 			_pInstance->WakeUp();
-		Threading::AtomicGuard l{ _indexMutex };
+		AtomicGuard l{ _indexMutex };
 		_indexes.push_back( _index );
 		return _index++;
 	}
@@ -107,7 +107,7 @@ namespace Jde::IO
 	α WinDriveWorker::Poll()noexcept->optional<bool>
 	{
 		var newQueueItem = base::Poll().value();
-		Threading::AtomicGuard l{ _argMutex };
+		AtomicGuard l{ _argMutex };
 		bool ioItem = _args.size();
 		if( ioItem )
 		{
@@ -123,7 +123,7 @@ namespace Jde::IO
 
 	α WinDriveWorker::HandleRequest( FileIOArg*&& pArg )noexcept->void
 	{
-		Threading::AtomicGuard l{ _argMutex };
+		AtomicGuard l{ _argMutex };
 		_args.emplace_back( pArg );
 		for( uint i=0; i<std::min<uint8>((uint8)pArg->Chunks.size(), DriveWorker::ThreadSize()); ++i )
 			IO::Send( (FileChunkArg&)*pArg->Chunks[i] );
@@ -133,7 +133,7 @@ namespace Jde::IO
 	{
 		if( auto pInstance=dynamic_pointer_cast<WinDriveWorker>(_pInstance); pInstance )
 		{
-			Threading::AtomicGuard l{ pInstance->_argMutex };
+			AtomicGuard l{ pInstance->_argMutex };
 			if( auto p = find(pInstance->_args.begin(), pInstance->_args.end(), pArg); p!=pInstance->_args.end() )
 				pInstance->_args.erase( p );
 			else
@@ -157,7 +157,7 @@ namespace Jde::IO::Drive
 	WIN32_FILE_ATTRIBUTE_DATA GetInfo( const fs::path& path )noexcept(false)
 	{
 		WIN32_FILE_ATTRIBUTE_DATA fInfo;
-		THROW_IFX( !GetFileAttributesExW(WindowsPath(path).c_str(), GetFileExInfoStandard, &fInfo), IOException(path, "Could not get file attributes:   '{}'.", GetLastError()) );
+		THROW_IFX( !GetFileAttributesExW(WindowsPath(path).c_str(), GetFileExInfoStandard, &fInfo), IOException(path, GetLastError(), "Could not get file attributes.") );
 		return fInfo;
 	}
 
@@ -180,7 +180,7 @@ namespace Jde::IO::Drive
 
 	map<string,IDirEntryPtr>  WindowsDrive::Recursive( path dir )noexcept(false)
 	{
-		CHECK_FILE_EXISTS( dir );
+		CHECK_PATH( dir );
 		var dirString = dir.string();
 		map<string,IDirEntryPtr> entries;
 
@@ -226,12 +226,12 @@ namespace Jde::IO::Drive
 
 	IDirEntryPtr WindowsDrive::CreateFolder( const fs::path& dir, const IDirEntry& dirEntry )noexcept(false)
 	{
-		THROW_IFX( !CreateDirectory(dir.string().c_str(), nullptr), IOException(dir, "Could not create - {}.", GetLastError()) );
+		THROW_IFX( !CreateDirectory(dir.string().c_str(), nullptr), IOException(dir, GetLastError(), "Could not create.") );
 		if( dirEntry.CreatedTime.time_since_epoch()!=Duration::zero() )
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
-			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );  THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(dir, "Could not create - {}."sv, GetLastError()) );
-			LOG_IF( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime), ELogLevel::Warning, "Could not update dir times '{}' - {}.", dir.string(), GetLastError() );
+			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );  THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(dir, GetLastError(), "Could not create."sv) );
+			LOG_IFL( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime), ELogLevel::Warning, "Could not update dir times '{}' - {}.", dir.string(), GetLastError() );
 			CloseHandle( hFile );
 		}
 		return make_shared<DirEntry>( dir );
@@ -243,7 +243,7 @@ namespace Jde::IO::Drive
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
 			auto hFile = CreateFileW( WindowsPath(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
-			THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(path, "Could not create - {}."sv, GetLastError()) );
+			THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(path, GetLastError(), "Could not create."sv) );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
 				WARN( "Could not update file times '{}' - {}."sv, path.string(), GetLastError() );
 			CloseHandle( hFile );
@@ -259,7 +259,7 @@ namespace Jde::IO::Drive
 
 	void WindowsDrive::SoftLink( path from, path to )noexcept(false)
 	{
-		THROW_IFX( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), IOException(from, "Creating symbolic link from to '{}' has failed - {}", to.string().c_str(), GetLastError()) );
+		THROW_IFX( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), IOException( from, GetLastError(), format("Creating symbolic link from to '{}'", to.string().c_str())) );
 	}
 	
 	/*
