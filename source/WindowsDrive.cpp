@@ -178,11 +178,11 @@ namespace Jde::IO::Drive
 		}
 	};
 
-	map<string,IDirEntryPtr>  WindowsDrive::Recursive( path dir )noexcept(false)
+	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( path dir )noexcept(false)
 	{
 		CHECK_PATH( dir );
 		var dirString = dir.string();
-		map<string,IDirEntryPtr> entries;
+		flat_map<string,IDirEntryPtr> entries;
 
 		std::function<void(const fs::directory_entry&)> fnctn;
 		fnctn = [&dir, &dirString, &entries, &fnctn]( const fs::directory_entry& entry )

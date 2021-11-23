@@ -28,5 +28,5 @@ namespace Jde
    private:
       HANDLE _value;
    };
-   using HandlePtr=unique_ptr<WinHandle, WinHandle::Deleter>;
+   using HandlePtr=std::unique_ptr<WinHandle, WinHandle::Deleter>;
 }
