@@ -12,6 +12,7 @@ namespace Jde
 }
 namespace Jde::IO
 {
+	static const LogTag& _logLevel{ Logging::TagLevel("io") };
 	α FileIOArg::Open()noexcept(false)->void
 	{
 		const DWORD access = IsRead ? GENERIC_READ : GENERIC_WRITE;
@@ -40,7 +41,7 @@ namespace Jde::IO
 		}
 		else
 		{
-			DBG( "Writing bytes {} - {}"sv, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
+			LOG( "Writing bytes {} - {}"sv, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
 			var h = arg.Handle.get();
 			RETURN_IF( !::WriteFileEx(h, chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
 		}
@@ -62,7 +63,7 @@ namespace Jde::IO
 				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, arg.Buffer) );
 			if( returnObject.HasResult() )
 			{
-				DBG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
+				LOG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
 				WinDriveWorker::Remove( &arg );
 				Coroutine::CoroutinePool::Resume( move(arg.CoHandle) );
 			}
@@ -71,7 +72,7 @@ namespace Jde::IO
 		}
 		catch( IException&  )
 		{}
-		//DBG( "~OverlappedCompletionRoutine"sv );
+		//LOG( "~OverlappedCompletionRoutine"sv );
 	}
 
 	α FileIOArg::Send( coroutine_handle<Task2::promise_type>&& h )noexcept->void
