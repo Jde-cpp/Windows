@@ -231,7 +231,7 @@ namespace Jde::IO::Drive
 		if( dirEntry.CreatedTime.time_since_epoch()!=Duration::zero() )
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
-			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );  THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(dir, GetLastError(), "Could not create."sv) );
+			auto hFile = CreateFileW( WindowsPath(dir).c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );  THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(dir, GetLastError(), "Could not create.") );
 			LOG_IFL( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime), ELogLevel::Warning, "Could not update dir times '{}' - {}.", dir.string(), GetLastError() );
 			CloseHandle( hFile );
 		}
@@ -244,7 +244,7 @@ namespace Jde::IO::Drive
 		{
 			var [createTime, modifiedTime, lastAccessedTime] = GetTimes( dirEntry );
 			auto hFile = CreateFileW( WindowsPath(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_BACKUP_SEMANTICS, nullptr );
-			THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(path, GetLastError(), "Could not create."sv) );
+			THROW_IFX( hFile==INVALID_HANDLE_VALUE, IOException(path, GetLastError(), "Could not create.") );
 			if( !SetFileTime(hFile, &createTime, &lastAccessedTime, &modifiedTime) )
 				WARN( "Could not update file times '{}' - {}."sv, path.string(), GetLastError() );
 			CloseHandle( hFile );

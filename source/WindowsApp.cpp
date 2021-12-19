@@ -77,10 +77,10 @@ namespace Jde
 		//TODO Implement
 	}
 	
-	bool isService{false};
+	bool _isService{false};
 	α OSApp::AsService()noexcept->bool 
 	{
-		isService = true;
+		_isService = true;
 		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
 		return true;
 	}
@@ -124,7 +124,7 @@ namespace Jde
 	α OSApp::Pause()noexcept->void
 	{
 		INFO( "Starting main thread loop...{}"sv, _getpid() );
-		if( isService )
+		if( _isService )
 		{
 			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)IApplication::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
 			var success = StartServiceCtrlDispatcher( DispatchTable );//blocks?
