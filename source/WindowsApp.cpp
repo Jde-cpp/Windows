@@ -164,12 +164,12 @@ namespace Jde
 
 	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
 
-	α OSApp::GetEnvironmentVariable( sv variable )noexcept->string
+	α OSApp::EnvironmentVariable( str variable )noexcept->string
 	{
 		char buffer[32767];
 		string result;
 		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
-			DBG( "GetEnvironmentVariable('{}') failed return {}"sv, variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
+			LOGT( Logging::TagLevel("settings"), "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
 		else
 			result = buffer;
 
@@ -177,7 +177,7 @@ namespace Jde
 	}
 	fs::path OSApp::ProgramDataFolder()noexcept
 	{
-		var env = GetEnvironmentVariable( "ProgramData" );
+		var env = EnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};
 	}
 

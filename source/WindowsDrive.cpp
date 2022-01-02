@@ -1,6 +1,7 @@
 ﻿#include "WindowsDrive.h"
 #include "WindowsUtilities.h"
 #include <jde/io/File.h>
+#include "../../Framework/source/Cache.h"
 #include "../../Framework/source/io/drive/DriveApi.h"
 #include "../../Framework/source/DateTime.h"
 #define var const auto
@@ -75,7 +76,7 @@ namespace Jde::IO
 		//LOG( "~OverlappedCompletionRoutine"sv );
 	}
 
-	α FileIOArg::Send( coroutine_handle<Task2::promise_type>&& h )noexcept->void
+	α FileIOArg::Send( coroutine_handle<Task::promise_type>&& h )noexcept->void
 	{
 		CoHandle = move( h );
 		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
@@ -104,7 +105,7 @@ namespace Jde::IO
 		return _index++;
 	}
 */	
-	Duration _keepAlive = Settings::TryGet<Duration>( "workers/drive/keepalive" ).value_or( 5s );
+	Duration _keepAlive = Settings::Get<Duration>( "workers/drive/keepalive" ).value_or( 5s );
 	α WinDriveWorker::Poll()noexcept->optional<bool>
 	{
 		var newQueueItem = base::Poll().value();
@@ -142,10 +143,13 @@ namespace Jde::IO
 		}
 	}
 
-	α DriveAwaitable::await_resume()noexcept->TaskResult
+	α DriveAwaitable::await_resume()noexcept->AwaitResult
 	{
 		base::AwaitResume();
-		return _pPromise ? TaskResult{ _pPromise->get_return_object().GetResult() } : TaskResult{ ExceptionPtr };
+		sp<void> pVoid = std::visit( [](auto&& x){return (sp<void>)x;}, _arg.Buffer );
+		if( _cache )
+			Cache::Set( _arg.Path.string(), pVoid );
+		return _pPromise ? AwaitResult{ pVoid } : AwaitResult{ ExceptionPtr };
 	}
 }
 
@@ -264,10 +268,10 @@ namespace Jde::IO::Drive
 	}
 	
 	/*
-	TaskResult DriveAwaitable::await_resume()noexcept
+	AwaitResult DriveAwaitable::await_resume()noexcept
 	{
 		base::AwaitResume();
-		return _pPromise ? TaskResult{ _pPromise->get_return_object().GetResult() } : TaskResult{ ExceptionPtr };
+		return _pPromise ? AwaitResult{ _pPromise->get_return_object().GetResult() } : AwaitResult{ ExceptionPtr };
 	}
 	bool DriveAwaitable::await_ready()noexcept
 	{
