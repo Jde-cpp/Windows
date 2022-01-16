@@ -20,13 +20,14 @@ namespace Jde::IO
 		const DWORD sharing = IsRead ? FILE_SHARE_READ : 0;
 		const DWORD creationDisposition = IsRead ? OPEN_EXISTING : CREATE_ALWAYS;
 		const DWORD dwFlagsAndAttributes = IsRead ? FILE_FLAG_SEQUENTIAL_SCAN : FILE_ATTRIBUTE_ARCHIVE;
-		Handle = HandlePtr( WinHandle(::CreateFile((string("\\\\?\\")+Path.string()).c_str(), access, sharing, nullptr, creationDisposition, FILE_FLAG_OVERLAPPED | dwFlagsAndAttributes, nullptr), [&](){return IOException(move(Path), GetLastError(), "CreateFile");}) );
+		Handle = HandlePtr( WinHandle(::CreateFile((string{"\\\\?\\"}+Path.string()).c_str(), access, sharing, nullptr, creationDisposition, FILE_FLAG_OVERLAPPED | dwFlagsAndAttributes, nullptr), [&](){return IOException(move(Path), GetLastError(), "CreateFile");}) );
 		if( IsRead )
 		{
 			LARGE_INTEGER fileSize; 
 			THROW_IFX( !::GetFileSizeEx(Handle.get(), &fileSize), IOException(move(Path), GetLastError(), "GetFileSizeEx") );
 			std::visit( [fileSize](auto&& b){b->resize(fileSize.QuadPart);}, Buffer );
 		}
+		LOG( "({}){} size={}", Path, IsRead ? "Read" : "Write", Size() );
 	}
 
 	α OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )->void;
@@ -42,7 +43,7 @@ namespace Jde::IO
 		}
 		else
 		{
-			LOG( "Writing bytes {} - {}"sv, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
+			LOG( "({})Writing {} - {}"sv, arg.Path, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
 			var h = arg.Handle.get();
 			RETURN_IF( !::WriteFileEx(h, chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine), "WriteFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
 		}
@@ -51,10 +52,9 @@ namespace Jde::IO
 
 	α OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )->void
 	{
-		static uint i=0;
 		try
 		{
-			THROW_IFX( dwErrorCode!=ERROR_SUCCESS, OSException(dwErrorCode, format("#{} - OverlappedCompletionRoutine xfered='{}'", i++, dwNumberOfBytesTransfered)) );//no pOverlapped
+			THROW_IFX( dwErrorCode!=ERROR_SUCCESS, OSException(dwErrorCode, format("OverlappedCompletionRoutine xfered='{}'", dwNumberOfBytesTransfered)) );//no pOverlapped
 			FileChunkArg& chunk = *(FileChunkArg*)pOverlapped->hEvent;
 			FileIOArg& arg = chunk.FileArg();
 			auto& returnObject = arg.CoHandle.promise().get_return_object();
@@ -64,7 +64,7 @@ namespace Jde::IO
 				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, arg.Buffer) );
 			if( returnObject.HasResult() )
 			{
-				LOG( "({})OverlappedCompletionRoutine - {}"sv, i++, dwNumberOfBytesTransfered );
+				LOG( "({})OverlappedCompletionRoutine - resume"sv, arg.Path );
 				WinDriveWorker::Remove( &arg );
 				Coroutine::CoroutinePool::Resume( move(arg.CoHandle) );
 			}
@@ -81,7 +81,7 @@ namespace Jde::IO
 		CoHandle = move( h );
 		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
 			Chunks.emplace_back( make_unique<FileChunkArg>(*this, i) );
-		
+		LOG( "({}) chunks = {}", Path, Chunks.size() );
 		WinDriveWorker::Push( this );
 	}
 
@@ -120,7 +120,7 @@ namespace Jde::IO
 		var result = newQueueItem || ioItem;
 		if( result )
 			_lastRequest = Clock::now();
-		return result ? result : _lastRequest.load()+_keepAlive>Clock::now() ? optional<bool>{ false } : std::nullopt;
+		return result ? result : _lastRequest.load()+_keepAlive<Clock::now() ? optional<bool>{ false } : std::nullopt;//(nullopt || true)==continue 
 	}
 
 	α WinDriveWorker::HandleRequest( FileIOArg*&& pArg )noexcept->void
@@ -147,9 +147,9 @@ namespace Jde::IO
 	{
 		base::AwaitResume();
 		sp<void> pVoid = std::visit( [](auto&& x){return (sp<void>)x;}, _arg.Buffer );
-		if( _cache )
+		if( _cache && _pPromise )
 			Cache::Set( _arg.Path.string(), pVoid );
-		return _pPromise ? AwaitResult{ pVoid } : AwaitResult{ ExceptionPtr };
+		return ExceptionPtr ? AwaitResult{ ExceptionPtr } : AwaitResult{ pVoid };
 	}
 }
 
@@ -185,7 +185,7 @@ namespace Jde::IO::Drive
 
 	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( path dir )noexcept(false)
 	{
-		CHECK_PATH( dir );
+		CHECK_PATH( dir, SRCE_CUR );
 		var dirString = dir.string();
 		flat_map<string,IDirEntryPtr> entries;
 
@@ -264,7 +264,8 @@ namespace Jde::IO::Drive
 
 	void WindowsDrive::SoftLink( path from, path to )noexcept(false)
 	{
-		THROW_IFX( !CreateSymbolicLinkW(((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0), IOException( from, GetLastError(), format("Creating symbolic link from to '{}'", to.string().c_str())) );
+		var hr = CreateSymbolicLinkW( ((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0 );
+		THROW_IFX( !hr, IOException( from, GetLastError(), format("Creating symbolic link from to '{}'", to.string().c_str())) );
 	}
 	
 	/*
