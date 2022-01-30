@@ -183,7 +183,7 @@ namespace Jde::IO::Drive
 		}
 	};
 
-	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( path dir )noexcept(false)
+	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( path dir, SL )noexcept(false)
 	{
 		CHECK_PATH( dir, SRCE_CUR );
 		var dirString = dir.string();

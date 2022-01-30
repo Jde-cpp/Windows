@@ -7,6 +7,7 @@ constexpr DWORD SVC_ERROR=0xC0020001L;
 
 namespace Jde::Windows
 {
+	static const LogTag& _logLevel = Logging::TagLevel( "settings" );
 	SERVICE_STATUS gSvcStatus{}; 
 	SERVICE_STATUS_HANDLE gSvcStatusHandle{}; 
 	//HANDLE ghSvcStopEvent = nullptr;
