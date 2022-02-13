@@ -55,7 +55,7 @@ namespace Jde
 		/*BOOL result =*/ ::GetProcessMemoryInfo( ::GetCurrentProcess(), &memCounter, sizeof(memCounter) );
 		return memCounter.WorkingSetSize;
 	}
-	fs::path IApplication::Path()noexcept
+	fs::path IApplication::ExePath()noexcept
 	{
 		return fs::path( _pgmptr );
 	}
@@ -199,7 +199,7 @@ namespace Jde
 		auto schSCManager = MyOpenSCManager();
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
 		const string serviceName{ ApplicationName() };
-		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, Path().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
+		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, ExePath().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
 		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_EXISTS ? "Service allready exists." : format("CreateService failed - {}", ::GetLastError()) );
 		if( serviceDescription.size() )
 		{
