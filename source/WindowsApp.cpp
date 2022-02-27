@@ -164,12 +164,15 @@ namespace Jde
 
 	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
 
-	α OSApp::EnvironmentVariable( str variable )noexcept->string
+	α OSApp::EnvironmentVariable( str variable, SL sl )noexcept->string
 	{
 		char buffer[32767];
 		string result;
 		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
-			LOGT( Logging::TagLevel("settings"), "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
+		{
+			var& _logLevel = Logging::TagLevel( "settings" );
+			LOGSL( "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
+		}
 		else
 			result = buffer;
 
