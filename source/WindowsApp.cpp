@@ -85,26 +85,30 @@ namespace Jde
 		return true;
 	}
 	
-	up<flat_map<string,string>> _pArgs;
-	α OSApp::Args()noexcept->flat_map<string,string>
+	up<flat_multimap<string,string>> _pArgs;
+	α OSApp::Args()noexcept->flat_multimap<string,string>
 	{
 		if( !_pArgs )
 		{
-			_pArgs = make_unique<flat_map<string,string>>();
+			_pArgs = make_unique<flat_multimap<string,string>>();
 			int nArgs;
 			LPWSTR* szArglist = ::CommandLineToArgvW( ::GetCommandLineW(), &nArgs );
 			if( !szArglist )
 				std::cerr << "CommandLineToArgvW failed\n";
 		   else 
 			{
-				auto p = _pArgs->try_emplace( {} );
 				for( uint i=0; i<nArgs; ++i ) 
 				{
 					var current = Windows::ToString( szArglist[i] );
 					if( current.starts_with('-') )
-						p = _pArgs->try_emplace( current );
+					{
+						var value{ ++i<nArgs ? Windows::ToString(szArglist[i]) : string{} };
+						if( value.starts_with('-') )
+							--i;
+						_pArgs->emplace( current, value );
+					}
 					else
-						p.first->second = current;
+						_pArgs->emplace( string{}, current );
 				}
 			   LocalFree(szArglist);
 			}
@@ -135,36 +139,49 @@ namespace Jde
 			Windows::WindowsWorkerMain::Start( false );
 	}
 	string _companyName;
-	α OSApp::CompanyName()noexcept->string
+
+//could get run before initialize logger.
+#define CHECK_NOLOG(condition) if( !(condition) ) throw Jde::Exception{ SRCE_CUR, Jde::ELogLevel::NoLog, #condition }
+	α LoadResource( sv key )noexcept->string
+	{
+		string y;
+		try
+		{
+			DWORD _;
+			var exe = OSApp::Executable().string();
+			var size = ::GetFileVersionInfoSize( exe.c_str(), &_ ); CHECK_NOLOG( size );
+			vector<BYTE> block( size );
+			CHECK_NOLOG( ::GetFileVersionInfo(exe.c_str(), _, size, block.data()) );
+			struct LANGANDCODEPAGE { WORD wLanguage; WORD wCodePage; } *lpTranslate; UINT cbTranslate;
+			::VerQueryValue( block.data(), TEXT("\\VarFileInfo\\Translation"), (LPVOID*)&lpTranslate, &cbTranslate ); CHECK_NOLOG( (cbTranslate/sizeof(struct LANGANDCODEPAGE)) );
+			char name[50];
+			CHECK_NOLOG( SUCCEEDED(::StringCchPrintf(name, sizeof(name), format("\\StringFileInfo\\%04x%04x\\{}", key).c_str(),  lpTranslate[0].wLanguage, lpTranslate[0].wCodePage)) );
+			char* pCompanyName; UINT bytes;
+			::VerQueryValue( block.data(),  name, (LPVOID*)&pCompanyName, &bytes );
+			y = sv{ pCompanyName, bytes-1 };
+		}
+		catch( IException& )
+		{}
+		return y;
+	}
+
+	α OSApp::CompanyName()noexcept->str
 	{
 		if(! _companyName.size() )
 		{
-			try
-			{
-				DWORD dummy;
-				var exe = Executable().string();
-				var size = ::GetFileVersionInfoSize( exe.c_str(), &dummy ); CHECK( size );
-				vector<BYTE> block( size );
-				CHECK( ::GetFileVersionInfo(exe.c_str(), dummy, size, block.data()) );
-				struct LANGANDCODEPAGE { WORD wLanguage; WORD wCodePage; } *lpTranslate; UINT cbTranslate;
-				::VerQueryValue( block.data(), TEXT("\\VarFileInfo\\Translation"), (LPVOID*)&lpTranslate, &cbTranslate ); CHECK( (cbTranslate/sizeof(struct LANGANDCODEPAGE)) );
-				char name[50];
-				CHECK( SUCCEEDED(::StringCchPrintf(name, sizeof(name), TEXT("\\StringFileInfo\\%04x%04x\\CompanyName"),  lpTranslate[0].wLanguage, lpTranslate[0].wCodePage)) );
-				char* pCompanyName; UINT bytes;
-				::VerQueryValue( block.data(),  name, (LPVOID*)&pCompanyName, &bytes );
-				_companyName = sv{ pCompanyName, bytes-1 };
-			}
-			catch( IException& )
-			{
+			_companyName = LoadResource( "CompanyName" );
+			if( _companyName.empty() )
 				_companyName = "Jde-cpp";
-			}
 		}
 		return _companyName;
 	}
-
+	α OSApp::ProductName()noexcept->string
+	{
+		return LoadResource( "ProductName" );
+	}
 	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
 
-	α OSApp::EnvironmentVariable( str variable, SL sl )noexcept->string
+	α IApplication::EnvironmentVariable( str variable, SL sl )noexcept->string
 	{
 		char buffer[32767];
 		string result;
@@ -178,7 +195,7 @@ namespace Jde
 
 		return result;
 	}
-	fs::path OSApp::ProgramDataFolder()noexcept
+	fs::path IApplication::ProgramDataFolder()noexcept
 	{
 		var env = EnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};

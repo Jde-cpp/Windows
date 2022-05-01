@@ -1,7 +1,9 @@
-namespace Jde::Windows
+﻿namespace Jde::Windows
 {
-	std::wstring ToWString( const string& value)noexcept;
-	std::string ToString( const std::wstring& value)noexcept;
-	SYSTEMTIME ToSystemTime( TimePoint time )noexcept;
-	TimePoint ToTimePoint( SYSTEMTIME systemTime )noexcept;
+	#define Φ Γ α
+	Φ ToWString( const string& value)noexcept->std::wstring;
+	Φ ToString( const std::wstring& value)noexcept->string;
+	Φ ToSystemTime( TimePoint time )noexcept->SYSTEMTIME;
+	Φ ToTimePoint( SYSTEMTIME systemTime )noexcept->TimePoint;
+#undef Φ
 }

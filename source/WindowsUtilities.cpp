@@ -1,22 +1,23 @@
-using namespace std::chrono;
+﻿using namespace std::chrono;
 #include <codecvt>
+#include "WindowsUtilities.h"
 #include "../../Framework/source/DateTime.h"
 
-namespace Jde::Windows
+namespace Jde
 {
-	std::wstring ToWString( const string& value)noexcept
+	α Windows::ToWString( const string& value)noexcept->std::wstring
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		return converter.from_bytes( value );
 	}
 
-	std::string ToString( const std::wstring& value)noexcept
+	α  Windows::ToString( const std::wstring& value)noexcept->string
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		return converter.to_bytes( value );
 	}
 
-	SYSTEMTIME ToSystemTime( TimePoint time )noexcept
+	α Windows::ToSystemTime( TimePoint time )noexcept->SYSTEMTIME
 	{
 		DateTime date{time};
 		SYSTEMTIME systemTime;
@@ -30,7 +31,7 @@ namespace Jde::Windows
 		return systemTime;
 	}
 
-	TimePoint ToTimePoint( SYSTEMTIME systemTime )noexcept
+	α Windows::ToTimePoint( SYSTEMTIME systemTime )noexcept->TimePoint
 	{
 		return DateTime{ systemTime.wYear, static_cast<uint8>(systemTime.wMonth), static_cast<uint8>(systemTime.wDay), static_cast<uint8>(systemTime.wHour), static_cast<uint8>(systemTime.wMinute), static_cast<uint8>(systemTime.wSecond), milliseconds(systemTime.wMilliseconds) }.GetTimePoint();
 	}

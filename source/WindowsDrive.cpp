@@ -61,7 +61,12 @@ namespace Jde::IO
 			if( auto pp = find_if( arg.Chunks.begin(), arg.Chunks.end(), [](var& x){ return !x->Sent;} ); pp!=arg.Chunks.end() )
 				Send( dynamic_cast<FileChunkArg&>(**pp) );
 			else if( arg.Chunks.size()==1 )
-				returnObject.SetResult( std::visit([](auto&& x){return (sp<void>)x;}, arg.Buffer) );
+			{
+				if( arg.Buffer.index()==0 )
+					returnObject.SetSP<vector<char>>( get<0>(arg.Buffer) );
+				else
+					returnObject.SetSP<string>( get<1>(arg.Buffer) );
+			}
 			if( returnObject.HasResult() )
 			{
 				LOG( "({})OverlappedCompletionRoutine - resume"sv, arg.Path );
@@ -149,7 +154,7 @@ namespace Jde::IO
 		sp<void> pVoid = std::visit( [](auto&& x){return (sp<void>)x;}, _arg.Buffer );
 		if( _cache && _pPromise )
 			Cache::Set( _arg.Path.string(), pVoid );
-		return ExceptionPtr ? AwaitResult{ ExceptionPtr } : AwaitResult{ pVoid };
+		return ExceptionPtr ? AwaitResult{ ExceptionPtr->Move() } : AwaitResult{ move(pVoid) };
 	}
 }
 
