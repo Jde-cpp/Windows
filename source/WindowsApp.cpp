@@ -8,11 +8,12 @@
 #include "WindowsWorker.h"
 #include "WindowsUtilities.h"
 
-
 #define var const auto
 
 namespace Jde
 {
+	static var& _logLevel{ Logging::TagLevel("settings") };
+
 	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )noexcept(false)
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
