@@ -87,11 +87,11 @@ namespace Jde
 	}
 	
 	up<flat_multimap<string,string>> _pArgs;
-	α OSApp::Args()noexcept->flat_multimap<string,string>
+	α OSApp::Args()noexcept->const flat_multimap<string,string>&
 	{
 		if( !_pArgs )
 		{
-			_pArgs = make_unique<flat_multimap<string,string>>();
+			_pArgs = mu<flat_multimap<string,string>>();
 			int nArgs;
 			LPWSTR* szArglist = ::CommandLineToArgvW( ::GetCommandLineW(), &nArgs );
 			if( !szArglist )
@@ -176,9 +176,16 @@ namespace Jde
 		}
 		return _companyName;
 	}
-	α OSApp::ProductName()noexcept->string
+	string _productName;
+	α OSApp::ProductName()noexcept->sv
 	{
-		return LoadResource( "ProductName" );
+		if( _productName.empty() )
+		{
+			_productName = LoadResource( "ProductName" );
+			if( _productName.empty() )
+				_productName = "Jde-cpp";
+		}
+		return _productName;
 	}
 	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
 

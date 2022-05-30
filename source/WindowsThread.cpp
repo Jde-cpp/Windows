@@ -75,7 +75,7 @@ namespace Jde
 			if( SUCCEEDED(hr) )
 			{
 				var size = wcslen(pszThreadDescription);
-				auto pDescription = make_unique<char[]>( size+1 );
+				auto pDescription = std::make_unique<char[]>( size+1 );
 				uint size2;
 				wcstombs_s( &size2, pDescription.get(), size+1, pszThreadDescription, size );
 				::LocalFree( pszThreadDescription );

@@ -15,13 +15,13 @@ namespace Jde::Windows
 
 	WindowsWorker::WindowsWorker( bool runOnMainThread )noexcept:
 		WORKER_INIT,
-		_pThread{ runOnMainThread ? nullptr : make_unique<jthread>([&](){Loop();}) }
+		_pThread{ runOnMainThread ? nullptr : mu<jthread>([&](){Loop();}) }
 	{}
 
 	WindowsWorker::WindowsWorker( Event&& initial )noexcept:
 		_queue{ move(initial) },
 		WORKER_INIT,
-		_pThread{ make_unique<jthread>( [&](){Loop();}) }
+		_pThread{ mu<jthread>( [&](){Loop();}) }
 	{}
 
 	void WindowsWorker::Stop()noexcept

@@ -85,7 +85,7 @@ namespace Jde::IO
 	{
 		CoHandle = move( h );
 		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
-			Chunks.emplace_back( make_unique<FileChunkArg>(*this, i) );
+			Chunks.emplace_back( mu<FileChunkArg>(*this, i) );
 		LOG( "({}) chunks = {}", Path, Chunks.size() );
 		WinDriveWorker::Push( this );
 	}
