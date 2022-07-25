@@ -241,7 +241,7 @@ namespace Jde
 	{
 		auto manager = MyOpenSCManager();
 		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
-		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService '{}' failed - {}", ::GetLastError()) );
+		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService failed - {}", ::GetLastError()) );
 		THROW_IF( !::DeleteService(service.get()), "DeleteService failed" );
 
 		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
