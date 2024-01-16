@@ -13,7 +13,7 @@ namespace Jde
 }
 namespace Jde::IO
 {
-	static const LogTag& _logLevel{ Logging::TagLevel("io") };
+	static sp<LogTag> _logLevel{ Logging::TagLevel("io") };
 	α FileIOArg::Open()noexcept(false)->void
 	{
 		const DWORD access = IsRead ? GENERIC_READ : GENERIC_WRITE;
@@ -57,17 +57,17 @@ namespace Jde::IO
 			THROW_IFX( dwErrorCode!=ERROR_SUCCESS, OSException(dwErrorCode, format("OverlappedCompletionRoutine xfered='{}'", dwNumberOfBytesTransfered)) );//no pOverlapped
 			FileChunkArg& chunk = *(FileChunkArg*)pOverlapped->hEvent;
 			FileIOArg& arg = chunk.FileArg();
-			auto& returnObject = arg.CoHandle.promise().get_return_object();
+			auto& promise = arg.CoHandle.promise();
 			if( auto pp = find_if( arg.Chunks.begin(), arg.Chunks.end(), [](var& x){ return !x->Sent;} ); pp!=arg.Chunks.end() )
 				Send( dynamic_cast<FileChunkArg&>(**pp) );
 			else if( arg.Chunks.size()==1 )
 			{
 				if( arg.Buffer.index()==0 )
-					returnObject.SetSP<vector<char>>( get<0>(arg.Buffer) );
+					promise.SetResult<vector<char>>( get<0>(move(arg.Buffer)) );
 				else
-					returnObject.SetSP<string>( get<1>(arg.Buffer) );
+					promise.SetResult<string>( get<1>(move(arg.Buffer)) );
 			}
-			if( returnObject.HasResult() )
+			if( promise.HasResult() )
 			{
 				LOG( "({})OverlappedCompletionRoutine - resume"sv, arg.Path );
 				WinDriveWorker::Remove( &arg );

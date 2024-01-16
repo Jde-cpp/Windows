@@ -14,7 +14,7 @@ constexpr const DWORD MS_VC_EXCEPTION = 0x406D1388;
 
 namespace Jde
 {
-	static const LogTag& _logLevel = Logging::TagLevel( "settings" );
+	static sp<LogTag> _logLevel = Logging::TagLevel( "settings" );
 	typedef HRESULT (WINAPI *TSetThreadDescription)( HANDLE, PCWSTR );
 	TSetThreadDescription pSetThreadDescription = nullptr;
 

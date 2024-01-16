@@ -143,10 +143,10 @@ namespace Jde::Windows
 						handled = false;
 				}
 				else
-					BREAK_IF( stop, ELogLevel::Debug, "Exiting with {} coroutins waiting.", _coroutines.size() );
+					BREAK_IFX( stop, ELogLevel::Debug, "Exiting with {} coroutines waiting.", _coroutines.size() );
 				if( !handled )
 				{
-					BREAK_IF( waitResult==WAIT_FAILED, ELogLevel::Critical, "WaitForMultipleObjects returned {}", ::GetLastError() );
+					BREAK_IFX( waitResult==WAIT_FAILED, ELogLevel::Critical, "WaitForMultipleObjects returned {}", ::GetLastError() );
 					ASSERT_DESC( false, format("Unknown result:  {}, count={}", waitResult, _objects.size()) );
 				}
 			}

@@ -166,7 +166,7 @@ namespace Jde
 		return y;
 	}
 
-	α OSApp::CompanyName()noexcept->str
+	α OSApp::CompanyName()noexcept->string
 	{
 		if(! _companyName.size() )
 		{
