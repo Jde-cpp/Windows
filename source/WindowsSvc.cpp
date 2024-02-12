@@ -1,4 +1,4 @@
-#include "WindowsSvc.h"
+﻿#include "WindowsSvc.h"
 #include <jde/App.h>
 #include "WindowsWorker.h"
 
@@ -7,7 +7,7 @@ constexpr DWORD SVC_ERROR=0xC0020001L;
 
 namespace Jde::Windows
 {
-	static const sp<LogTag> _logLevel = Logging::TagLevel( "settings" );
+	static const sp<LogTag> _logTag = Logging::Tag( "settings" );
 	SERVICE_STATUS gSvcStatus{}; 
 	SERVICE_STATUS_HANDLE gSvcStatusHandle{}; 
 	//HANDLE ghSvcStopEvent = nullptr;
@@ -19,7 +19,7 @@ namespace Jde::Windows
 		{  
 		case SERVICE_CONTROL_STOP: 
 			Service::ReportStatus( SERVICE_STOP_PENDING, NO_ERROR, 0 );
-			WindowsWorkerMain::Stop();
+			WindowsWorkerMain::Stop( SERVICE_CONTROL_STOP );
 			Service::ReportStatus( gSvcStatus.dwCurrentState, NO_ERROR, 0 );
 			return;
 		case SERVICE_CONTROL_INTERROGATE: 
@@ -29,7 +29,7 @@ namespace Jde::Windows
 		} 
 	}
 
-	void Service::ReportStatus( DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint )noexcept
+	void Service::ReportStatus( DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint )ι
 	{
 		 // Fill in the SERVICE_STATUS structure.
 
@@ -45,16 +45,16 @@ namespace Jde::Windows
 		 SetServiceStatus( gSvcStatusHandle, &gSvcStatus );
 	}
 
-	void Service::ReportEvent( sv function )noexcept
+	void Service::ReportEvent( sv function )ι
 	{ 
 		string buffer = format( "{} failed with {}", function, GetLastError() );
-		HANDLE hEventSource = ::RegisterEventSource( nullptr, string{IApplication::ApplicationName()}.c_str() ); RETURN_IF( !hEventSource, "RegisterEventSource returned null" );
+		HANDLE hEventSource = ::RegisterEventSource( nullptr, string{IApplication::ApplicationName()}.c_str() ); RETURN_IF( !hEventSource, ELogLevel::Critical, "RegisterEventSource returned null");
 		const char* lpszStrings[2] = { IApplication::ApplicationName().data(), buffer.data() };
 		::ReportEvent( hEventSource, EVENTLOG_ERROR_TYPE, 0, SVC_ERROR, nullptr, 2, 0, lpszStrings, nullptr );
 		DeregisterEventSource( hEventSource );
 	}
 
-	void Service::Main( DWORD /*dwArgc*/, char** /*lpszArgv*/ )noexcept
+	void Service::Main( DWORD /*dwArgc*/, char** /*lpszArgv*/ )ι
 	{
 		 gSvcStatusHandle = RegisterServiceCtrlHandler( string{IApplication::ApplicationName()}.c_str(),  SvcCtrlHandler );
 		 if( !gSvcStatusHandle )

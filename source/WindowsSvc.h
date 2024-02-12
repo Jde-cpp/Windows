@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 
 namespace Jde::Windows::Service
 {
-	void ReportStatus(unsigned long dwCurrentState, unsigned long dwWin32ExitCode, unsigned long dwWaitHint )noexcept;
-	void ReportEvent( sv function )noexcept;
-	void Main(unsigned long dwArgc, LPTSTR *lpszArgv )noexcept;
+	void ReportStatus(unsigned long dwCurrentState, unsigned long dwWin32ExitCode, unsigned long dwWaitHint )ι;
+	void ReportEvent( sv function )ι;
+	void Main(unsigned long dwArgc, LPTSTR *lpszArgv )ι;
 }

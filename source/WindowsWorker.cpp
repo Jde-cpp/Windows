@@ -9,47 +9,48 @@
 namespace Jde::Windows
 {
 	up<WindowsWorkerMain> WindowsWorkerMain::_pInstance;
+	sp<LogTag> _logTag{ Logging::Tag("threads") };
 
 #define CREATE_EVENT ::CreateEvent(nullptr, TRUE, FALSE, nullptr)
 #define WORKER_INIT _eventQueue{ CREATE_EVENT }, _eventStop{ CREATE_EVENT }
 
-	WindowsWorker::WindowsWorker( bool runOnMainThread )noexcept:
+	WindowsWorker::WindowsWorker( bool runOnMainThread )ι:
 		WORKER_INIT,
 		_pThread{ runOnMainThread ? nullptr : mu<jthread>([&](){Loop();}) }
 	{}
 
-	WindowsWorker::WindowsWorker( Event&& initial )noexcept:
+	WindowsWorker::WindowsWorker( Event&& initial )ι:
 		_queue{ move(initial) },
 		WORKER_INIT,
 		_pThread{ mu<jthread>( [&](){Loop();}) }
 	{}
 
-	void WindowsWorker::Stop()noexcept
+	void WindowsWorker::Stop()ι
 	{}
 
-	α WindowsWorkerMain::Push( coroutine_handle<>&& h, HANDLE hEvent, bool close )noexcept->void
+	α WindowsWorkerMain::Push( coroutine_handle<>&& h, HANDLE hEvent, bool close )ι->void
 	{
 		ASSERT( _pInstance );
 		if( _pInstance )
 		{
 			_pInstance->_queue.Push( {{move(h), close}, hEvent} );
-			LOG_IFL( !::SetEvent(_pInstance->_eventQueue), ELogLevel::Error, "SetEvent returned false" );
+			LOG_IF( !::SetEvent(_pInstance->_eventQueue), ELogLevel::Error, "SetEvent returned false" );
 		}
 	}
 
-	α WindowsWorker::SubPush( Event& e )noexcept->bool
+	α WindowsWorker::SubPush( Event& e )ι->bool
 	{
 		AtomicGuard l{ _lock };
 		var set = !Stopped() && _queue.size()+_coroutines.size()<MaxEvents();
 		if( set )
 		{
 			_queue.Push( move(e) );
-			LOG_IFL( !::SetEvent(_eventQueue), ELogLevel::Error, "SetEvent returned false" );
+			LOG_IF( !::SetEvent(_eventQueue), ELogLevel::Error, "SetEvent returned false" );
 		}
 		return set;
 	}
 
-	α WindowsWorker::AddWaitRoutine( Event&& e )noexcept->void
+	α WindowsWorker::AddWaitRoutine( Event&& e )ι->void
 	{
 		if( ((TimePoint)_stop)==TimePoint{} )
 		{
@@ -60,13 +61,13 @@ namespace Jde::Windows
 			ERR( "Stopped can't add event."sv );
 	}
 
-	void WindowsWorker::HandleEvent( Event&& e )noexcept
+	void WindowsWorker::HandleEvent( Event&& e )ι
 	{
 		ASSERT( _coroutines.size()<MaxEvents() );
 		AddWaitRoutine( move(e) );
 	}
 
-	void WindowsWorkerMain::HandleEvent( Event&& e )noexcept
+	void WindowsWorkerMain::HandleEvent( Event&& e )ι
 	{
 		if( _coroutines.size()<MaxEvents() )
 			AddWaitRoutine( move(e) );
@@ -80,23 +81,23 @@ namespace Jde::Windows
 		}
 	}
 
-	α WindowsWorkerMain::HandleWorkerEvent()noexcept->void
+	α WindowsWorkerMain::HandleWorkerEvent()ι->void
 	{
 		for( auto pp = _workerBuffers.begin(); pp!=_workerBuffers.end(); pp = (*pp)->Stopped() ? _workerBuffers.erase(pp) : next(pp) );
 	}
-	static var _logLevel{ Logging::TagLevel("threads") };
-	DWORD WindowsWorker::Loop()noexcept
+
+	DWORD WindowsWorker::Loop()ι
 	{
 		PreLoop();
 		DWORD waitResult;
 		for( ;; )
 		{
-			LOG( "WaitForMultipleObjects" );
+			TRACE( "WaitForMultipleObjects" );
 			waitResult = ::WaitForMultipleObjects( (DWORD)_objects.size(), _objects.data(), FALSE, INFINITE );
-			LOG( "WaitForMultipleObjects - returned {}", waitResult );
+			TRACE( "WaitForMultipleObjects - returned {}", waitResult );
 			if( waitResult==1 )//_eventStop
 			{
-				LOG_IFL( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
+				LOG_IF( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
 				break;
 			}
 			ASSERT( false );//not sure of use case here.
@@ -124,7 +125,7 @@ namespace Jde::Windows
 			}
 			else if( waitResult==_coroutines.size() )
 			{
-				LOG_IFL( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
+				LOG_IF( !::ResetEvent(_objects[waitResult]), ELogLevel::Error, "ResetEvent failed for event object" );
 				vector<Event> events = _queue.PopAll();
 				for( auto& e : events )
 					HandleEvent( move(e) );
@@ -143,26 +144,26 @@ namespace Jde::Windows
 						handled = false;
 				}
 				else
-					BREAK_IFX( stop, ELogLevel::Debug, "Exiting with {} coroutines waiting.", _coroutines.size() );
+					LOG_IF( stop, ELogLevel::Critical, "Exiting with {} coroutines waiting.", _coroutines.size() );
 				if( !handled )
 				{
-					BREAK_IFX( waitResult==WAIT_FAILED, ELogLevel::Critical, "WaitForMultipleObjects returned {}", ::GetLastError() );
+					LOG_IF(  waitResult==WAIT_FAILED, ELogLevel::Critical, "WaitForMultipleObjects returned {}", ::GetLastError() );
 					ASSERT_DESC( false, format("Unknown result:  {}, count={}", waitResult, _objects.size()) );
 				}
 			}
 		}
 		return waitResult==WAIT_FAILED ? ERROR_BAD_COMMAND : NO_ERROR;
 	}
-	WindowsWorkerMain::WindowsWorkerMain( bool runOnMainThread )noexcept:
+	WindowsWorkerMain::WindowsWorkerMain( bool runOnMainThread )ι:
 		WindowsWorker{ runOnMainThread }
 	{}
 
-	α WindowsWorkerMain::Start( optional<bool> pService )noexcept->void
+	α WindowsWorkerMain::Start( optional<bool> pService )ι->void
 	{
 		var runOnMainThread = pService.has_value();
 		var service = runOnMainThread && *pService;
 		if( !_pInstance )
-			_pInstance = up<WindowsWorkerMain>( new WindowsWorkerMain{runOnMainThread} );
+			_pInstance = up<WindowsWorkerMain>( new WindowsWorkerMain{runOnMainThread} );//private constructor
 		if( service )
 			Service::ReportStatus( SERVICE_RUNNING, NO_ERROR, 0 );
 		if( runOnMainThread )
@@ -173,14 +174,15 @@ namespace Jde::Windows
 		}
 	}
 
-	α WindowsWorkerMain::Stop()noexcept->void
+	α WindowsWorkerMain::Stop( int exitCode )ι->void
 	{
 		if( _pInstance )
 		{
-			LOG( "Stopping" );
-			LOG_IFL( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
+			INFO( "Stopping {}", exitCode );
+			IApplication::Exit( exitCode );
+			LOG_IF( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
 		}
 		else
-			LOG( "Stopping but no instance" );
+			WARN( "Stopping but no instance" );
 	}
 }

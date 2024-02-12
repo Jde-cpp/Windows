@@ -12,55 +12,71 @@
 
 namespace Jde
 {
-	static var& _logLevel{ Logging::TagLevel("settings") };
+	static var& _logTag{ Logging::Tag("app") };
 
-	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )noexcept(false)
+	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )ε
 	{
 		IApplication::_pInstance = make_shared<OSApp>();
 		return IApplication::_pInstance->BaseStartup( argc, argv, appName, serviceDescription );	
 	}
 
-	bool OSApp::KillInstance( uint /*processId*/ )noexcept
-	{
-		CRITICAL( "Kill not implemented"sv );
-		return false;
+	bool OSApp::KillInstance( uint processId )ι{
+		INFO( "Kill received - stopping instance" );
+		var proc = ::OpenProcess( PROCESS_TERMINATE, false, (DWORD)processId );
+		if( proc ){
+			::TerminateProcess( proc, 1 );
+			::CloseHandle( proc );
+		}
+		return proc;
 	}
-	void OSApp::SetConsoleTitle( sv title )noexcept
+	void OSApp::SetConsoleTitle( sv title )ι
 	{
 		::SetConsoleTitle( format("{}({})", title, ProcessId()).c_str() );
 	}
 
-	[[noreturn]] BOOL HandlerRoutine( DWORD  ctrlType )
+	BOOL HandlerRoutine( DWORD ctrlType )
 	{
-		TRACE( "Caught signal {}", ctrlType );
-		for( auto pThread : IApplication::GetBackgroundThreads() )
-			pThread->Interrupt();
-		for( auto pThread : IApplication::GetBackgroundThreads() )
-			pThread->Join();
-		exit( 1 ); 
+		bool handled{ true };
+		switch( ctrlType )
+    {
+    case CTRL_C_EVENT: INFO( "Ctrl-C event" ); break;
+    case CTRL_CLOSE_EVENT: INFO( "Ctrl-Close event" ); break;
+		case CTRL_BREAK_EVENT: INFO( "Ctrl-Break event" ); break;
+    case CTRL_LOGOFF_EVENT: INFO("Ctrl-Logoff event"); break;
+		case CTRL_SHUTDOWN_EVENT: INFO("Ctrl-Shutdown event"); break;
+    default: INFO( "Ctrl-C event unhanded: {:x}", ctrlType ); handled = false;
+    }
+		if( handled )
+			Windows::WindowsWorkerMain::Stop( ctrlType );
+		//for( auto pThread : IApplication::GetBackgroundThreads() )
+		//	pThread->Interrupt();
+		//for( auto pThread : IApplication::GetBackgroundThreads() )
+		//	pThread->Join();
+		//exit( 1 ); 
+		return handled;
 //		unreachable... return TRUE;
 	}
-	void AddSignals2()noexcept(false)
+	void AddSignals2()ε
 	{
 		if( !SetConsoleCtrlHandler(HandlerRoutine, TRUE) )
 			THROW( "Could not set control handler" );
 	}
-	void OSApp::AddSignals()noexcept(false)
+	void OSApp::AddSignals()ε
 	{
 		AddSignals2();
 	}
 
-	size_t IApplication::MemorySize()noexcept
+	size_t IApplication::MemorySize()ι
 	{
 		PROCESS_MEMORY_COUNTERS memCounter;
 		/*BOOL result =*/ ::GetProcessMemoryInfo( ::GetCurrentProcess(), &memCounter, sizeof(memCounter) );
 		return memCounter.WorkingSetSize;
 	}
-	fs::path IApplication::ExePath()noexcept
+	fs::path IApplication::ExePath()ι
 	{
 		return fs::path( _pgmptr );
 	}
-	string IApplication::HostName()noexcept
+	string IApplication::HostName()ι
 	{
 		DWORD maxHostName = 1024;
 		char hostname[1024];
@@ -68,18 +84,18 @@ namespace Jde
 
 		return hostname;
 	}
-	uint OSApp::ProcessId()noexcept
+	uint OSApp::ProcessId()ι
 	{
 		return _getpid();
 	}
 
-	void IApplication::OnTerminate()noexcept
+	void IApplication::OnTerminate()ι
 	{
 		//TODO Implement
 	}
 	
 	bool _isService{false};
-	α OSApp::AsService()noexcept->bool 
+	α OSApp::AsService()ι->bool 
 	{
 		_isService = true;
 		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
@@ -87,7 +103,7 @@ namespace Jde
 	}
 	
 	up<flat_multimap<string,string>> _pArgs;
-	α OSApp::Args()noexcept->const flat_multimap<string,string>&
+	α OSApp::Args()ι->const flat_multimap<string,string>&
 	{
 		if( !_pArgs )
 		{
@@ -116,19 +132,19 @@ namespace Jde
 		}
 		return *_pArgs;
 	}
-	α OSApp::Executable()noexcept->fs::path
+	α OSApp::Executable()ι->fs::path
 	{
 		return fs::path{ Args().find( {} )->second };
 	}
 
-	α OSApp::UnPause()noexcept->void
+	α OSApp::UnPause()ι->void
 	{
-		Windows::WindowsWorkerMain::Stop();
+		Windows::WindowsWorkerMain::Stop( 0 );
 	}
 
-	α OSApp::Pause()noexcept->void
+	α OSApp::Pause()ι->void
 	{
-		INFO( "Starting main thread loop...{}"sv, _getpid() );
+		INFO( "Starting main thread loop...{}", _getpid() );
 		if( _isService )
 		{
 			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)IApplication::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
@@ -143,7 +159,7 @@ namespace Jde
 
 //could get run before initialize logger.
 #define CHECK_NOLOG(condition) if( !(condition) ) throw Jde::Exception{ SRCE_CUR, Jde::ELogLevel::NoLog, #condition }
-	α LoadResource( sv key )noexcept->string
+	α LoadResource( sv key )ι->string
 	{
 		string y;
 		try
@@ -166,7 +182,7 @@ namespace Jde
 		return y;
 	}
 
-	α OSApp::CompanyName()noexcept->string
+	α OSApp::CompanyName()ι->string
 	{
 		if(! _companyName.size() )
 		{
@@ -177,7 +193,7 @@ namespace Jde
 		return _companyName;
 	}
 	string _productName;
-	α OSApp::ProductName()noexcept->sv
+	α OSApp::ProductName()ι->sv
 	{
 		if( _productName.empty() )
 		{
@@ -187,23 +203,23 @@ namespace Jde
 		}
 		return _productName;
 	}
-	α OSApp::CompanyRootDir()noexcept->fs::path{ return CompanyName(); }
+	α OSApp::CompanyRootDir()ι->fs::path{ return CompanyName(); }
 
-	α IApplication::EnvironmentVariable( str variable, SL sl )noexcept->string
+	α IApplication::EnvironmentVariable( str variable, SL sl )ι->string
 	{
 		char buffer[32767];
 		string result;
 		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
 		{
-			var& _logLevel = Logging::TagLevel( "settings" );
-			LOGSL( "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
+			var& _logTag = Logging::Tag( "settings" );
+			DBGSL( "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
 		}
 		else
 			result = buffer;
 
 		return result;
 	}
-	fs::path IApplication::ProgramDataFolder()noexcept
+	fs::path IApplication::ProgramDataFolder()ι
 	{
 		var env = EnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};
@@ -215,14 +231,14 @@ namespace Jde
 	};
 	using ServiceHandle = std::unique_ptr<SC_HANDLE__, SCDeleter>;
 
-	ServiceHandle MyOpenSCManager()noexcept(false)
+	ServiceHandle MyOpenSCManager()ε
 	{
 		auto schSCManager = ServiceHandle{ ::OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS) };
 		THROW_IF( !schSCManager.get(), ::GetLastError()==ERROR_ACCESS_DENIED ? "installation requires administrative privliges." : format("OpenSCManager failed - {}", ::GetLastError()) );
 		return schSCManager;
 	}
 
-	α OSApp::Install( str serviceDescription )noexcept(false)->void
+	α OSApp::Install( str serviceDescription )ε->void
 	{
 		auto schSCManager = MyOpenSCManager();
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
@@ -237,7 +253,7 @@ namespace Jde
 		}
 		INFO( "service '{}' installed successfully"sv, serviceName );
 	}
-	α OSApp::Uninstall()noexcept(false)->void
+	α OSApp::Uninstall()ε->void
 	{
 		auto manager = MyOpenSCManager();
 		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
@@ -246,17 +262,17 @@ namespace Jde
 
 		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
 	}
-	α OSApp::LoadLibrary( path path )noexcept(false)->void*
+	α OSApp::LoadLibrary( path path )ε->void*
 	{
 		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException(path, GetLastError(), "Can not load library") );
 		INFO( "({})Opened"sv, path.string() );
 		return p;
 	}
-	α OSApp::FreeLibrary( void* p )noexcept->void
+	α OSApp::FreeLibrary( void* p )ι->void
 	{
 		::FreeLibrary( (HMODULE)p );
 	}
-	α OSApp::GetProcAddress( void* pModule, str procName )noexcept(false)->void*
+	α OSApp::GetProcAddress( void* pModule, str procName )ε->void*
 	{
 		auto p = ::GetProcAddress( (HMODULE)pModule, procName.c_str() ); CHECK( p );
 		return p;

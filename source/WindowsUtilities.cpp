@@ -5,19 +5,19 @@
 
 namespace Jde
 {
-	α Windows::ToWString( const string& value)noexcept->std::wstring
+	α Windows::ToWString( const string& value)ι->std::wstring
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		return converter.from_bytes( value );
 	}
 
-	α  Windows::ToString( const std::wstring& value)noexcept->string
+	α  Windows::ToString( const std::wstring& value)ι->string
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		return converter.to_bytes( value );
 	}
 
-	α Windows::ToSystemTime( TimePoint time )noexcept->SYSTEMTIME
+	α Windows::ToSystemTime( TimePoint time )ι->SYSTEMTIME
 	{
 		DateTime date{time};
 		SYSTEMTIME systemTime;
@@ -31,7 +31,7 @@ namespace Jde
 		return systemTime;
 	}
 
-	α Windows::ToTimePoint( SYSTEMTIME systemTime )noexcept->TimePoint
+	α Windows::ToTimePoint( SYSTEMTIME systemTime )ι->TimePoint
 	{
 		return DateTime{ systemTime.wYear, static_cast<uint8>(systemTime.wMonth), static_cast<uint8>(systemTime.wDay), static_cast<uint8>(systemTime.wHour), static_cast<uint8>(systemTime.wMinute), static_cast<uint8>(systemTime.wSecond), milliseconds(systemTime.wMilliseconds) }.GetTimePoint();
 	}

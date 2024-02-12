@@ -30,11 +30,11 @@ namespace Jde::IO
 	{
 		using base=IQueueWorker<FileIOArg*,WinDriveWorker>;
 		WinDriveWorker():base{}{}
-		Ω Remove( FileIOArg* pArg )noexcept->void;
-		α Poll()noexcept->optional<bool> override;
-		α HandleRequest( FileIOArg*&& x )noexcept->void override;
-		α SetWorker( FileIOArg*& p )noexcept->void override{ p->SetWorker( shared_from_this() ); }
-		α Shutdown()noexcept->void override{}
+		Ω Remove( FileIOArg* pArg )ι->void;
+		α Poll()ι->optional<bool> override;
+		α HandleRequest( FileIOArg*&& x )ι->void override;
+		α SetWorker( FileIOArg*& p )ι->void override{ p->SetWorker( shared_from_this() ); }
+		α Shutdown()ι->void override{}
 		static constexpr sv Name{ "drive" };
 
 	private:
@@ -65,7 +65,7 @@ namespace Jde::IO::Drive
 		DriveArg( fs::path&& path, sp<IDrive> pDrive, sp<string> pData ):
 			Path{ move(path) }, DrivePtr{ pDrive }, Buffer{ pData }
 		{}
-		void Send( up<::OVERLAPPED> pOverlapped )noexcept;
+		void Send( up<::OVERLAPPED> pOverlapped )ι;
 		void SetWorker( sp<Threading::IWorker> p ){ _pWorkerKeepAlive=p; }
 		bool IsRead{false};
 		fs::path Path;
@@ -83,12 +83,12 @@ namespace Jde::IO::Drive
 	struct DriveAwaitable : Coroutine::IAwaitable
 	{
 		using base=Coroutine::IAwaitable;
-		DriveAwaitable( fs::path&& path, bool vector, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, vector }{ DBG("DriveAwaitable::Read"sv); }
-		DriveAwaitable( fs::path&& path, sp<vector<char>> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{ DBG("DriveAwaitable::Write"sv); }
-		DriveAwaitable( fs::path&& path, sp<string> data, sp<IDrive> pDrive )noexcept:_arg{ move(path), pDrive, data }{ DBG("her3e"sv); }
-		bool await_ready()noexcept override;
-		void await_suspend( typename base::THandle h )noexcept override;//{ base::await_suspend( h ); _pPromise = &h.promise(); }
-		TaskResult await_resume()noexcept override;
+		DriveAwaitable( fs::path&& path, bool vector, sp<IDrive> pDrive )ι:_arg{ move(path), pDrive, vector }{ DBG("DriveAwaitable::Read"sv); }
+		DriveAwaitable( fs::path&& path, sp<vector<char>> data, sp<IDrive> pDrive )ι:_arg{ move(path), pDrive, data }{ DBG("DriveAwaitable::Write"sv); }
+		DriveAwaitable( fs::path&& path, sp<string> data, sp<IDrive> pDrive )ι:_arg{ move(path), pDrive, data }{ DBG("her3e"sv); }
+		bool await_ready()ι override;
+		void await_suspend( typename base::THandle h )ι override;//{ base::await_suspend( h ); _pPromise = &h.promise(); }
+		TaskResult await_resume()ι override;
 	private:
 		std::exception_ptr ExceptionPtr;
 		DriveArg _arg;
@@ -96,18 +96,18 @@ namespace Jde::IO::Drive
 	*/
 	struct Γ WindowsDrive final : IDrive//TODO remove Γ
 	{
-		IDirEntryPtr Get( const fs::path& path )noexcept(false) override;
-		flat_map<string,IDirEntryPtr> Recursive( const fs::path& dir, SRCE )noexcept(false) override;
-		IDirEntryPtr Save( const fs::path& path, const vector<char>& bytes, const IDirEntry& dirEntry )noexcept(false) override;
-		IDirEntryPtr CreateFolder( const fs::path& path, const IDirEntry& dirEntry )noexcept(false) override;
+		IDirEntryPtr Get( const fs::path& path )ε override;
+		flat_map<string,IDirEntryPtr> Recursive( const fs::path& dir, SRCE )ε override;
+		IDirEntryPtr Save( const fs::path& path, const vector<char>& bytes, const IDirEntry& dirEntry )ε override;
+		IDirEntryPtr CreateFolder( const fs::path& path, const IDirEntry& dirEntry )ε override;
 		void Remove( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
 		void Trash( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
 		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( "Not Implemented" );}
-		VectorPtr<char> Load( const IDirEntry& dirEntry )noexcept(false) override;
-		void Restore( sv )noexcept(false)override{ THROW("Not Implemented"); }
-		void SoftLink( path from, path to )noexcept(false)override;
-		//DriveAwaitable Read( fs::path&& path, bool vector=true )noexcept{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
-		//DriveAwaitable Write( fs::path&& path, sp<vector<char>> data )noexcept{ return DriveAwaitable{move(path), data, shared_from_this()}; }
-		//DriveAwaitable Write( fs::path&& path, sp<string> data )noexcept{ return DriveAwaitable{move(path), data, shared_from_this()}; }
+		VectorPtr<char> Load( const IDirEntry& dirEntry )ε override;
+		void Restore( sv )ε override{ THROW("Not Implemented"); }
+		void SoftLink( path from, path to )ε override;
+		//DriveAwaitable Read( fs::path&& path, bool vector=true )ι{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
+		//DriveAwaitable Write( fs::path&& path, sp<vector<char>> data )ι{ return DriveAwaitable{move(path), data, shared_from_this()}; }
+		//DriveAwaitable Write( fs::path&& path, sp<string> data )ι{ return DriveAwaitable{move(path), data, shared_from_this()}; }
 	};
 }
