@@ -105,7 +105,7 @@ namespace Jde::IO::Drive
 		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( "Not Implemented" );}
 		VectorPtr<char> Load( const IDirEntry& dirEntry )ε override;
 		void Restore( sv )ε override{ THROW("Not Implemented"); }
-		void SoftLink( path from, path to )ε override;
+		void SoftLink( const fs::path& from, const fs::path& to )ε override;
 		//DriveAwaitable Read( fs::path&& path, bool vector=true )ι{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
 		//DriveAwaitable Write( fs::path&& path, sp<vector<char>> data )ι{ return DriveAwaitable{move(path), data, shared_from_this()}; }
 		//DriveAwaitable Write( fs::path&& path, sp<string> data )ι{ return DriveAwaitable{move(path), data, shared_from_this()}; }

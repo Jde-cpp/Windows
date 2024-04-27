@@ -31,7 +31,7 @@ namespace Jde
 	}
 	void OSApp::SetConsoleTitle( sv title )ι
 	{
-		::SetConsoleTitle( format("{}({})", title, ProcessId()).c_str() );
+		::SetConsoleTitle( Jde::format("{}({})", title, ProcessId()).c_str() );
 	}
 
 	BOOL HandlerRoutine( DWORD ctrlType )
@@ -172,7 +172,7 @@ namespace Jde
 			struct LANGANDCODEPAGE { WORD wLanguage; WORD wCodePage; } *lpTranslate; UINT cbTranslate;
 			::VerQueryValue( block.data(), TEXT("\\VarFileInfo\\Translation"), (LPVOID*)&lpTranslate, &cbTranslate ); CHECK_NOLOG( (cbTranslate/sizeof(struct LANGANDCODEPAGE)) );
 			char name[50];
-			CHECK_NOLOG( SUCCEEDED(::StringCchPrintf(name, sizeof(name), format("\\StringFileInfo\\%04x%04x\\{}", key).c_str(),  lpTranslate[0].wLanguage, lpTranslate[0].wCodePage)) );
+			CHECK_NOLOG( SUCCEEDED(::StringCchPrintf(name, sizeof(name), Jde::format("\\StringFileInfo\\%04x%04x\\{}", key).c_str(),  lpTranslate[0].wLanguage, lpTranslate[0].wCodePage)) );
 			char* pCompanyName; UINT bytes;
 			::VerQueryValue( block.data(),  name, (LPVOID*)&pCompanyName, &bytes );
 			y = sv{ pCompanyName, bytes-1 };
@@ -193,10 +193,8 @@ namespace Jde
 		return _companyName;
 	}
 	string _productName;
-	α OSApp::ProductName()ι->sv
-	{
-		if( _productName.empty() )
-		{
+	α OSApp::ProductName()ι->sv{
+		if( _productName.empty() ){
 			_productName = LoadResource( "ProductName" );
 			if( _productName.empty() )
 				_productName = "Jde-cpp";
@@ -205,22 +203,17 @@ namespace Jde
 	}
 	α OSApp::CompanyRootDir()ι->fs::path{ return CompanyName(); }
 
-	α IApplication::EnvironmentVariable( str variable, SL sl )ι->string
-	{
+	α IApplication::EnvironmentVariable( str variable, SL sl )ι->string{
 		char buffer[32767];
 		string result;
 		if( !::GetEnvironmentVariable(string(variable).c_str(), buffer, sizeof(buffer)) )
-		{
-			var& _logTag = Logging::Tag( "settings" );
-			DBGSL( "GetEnvironmentVariable('{}') failed return {}", variable, ::GetLastError() );//ERROR_ENVVAR_NOT_FOUND=203
-		}
+			Logging::LogOnce( Logging::Message{ELogLevel::Debug, "GetEnvironmentVariable('{}') failed:  {:x}", sl}, Logging::Tag("settings"), variable, ::GetLastError() );
 		else
 			result = buffer;
 
 		return result;
 	}
-	fs::path IApplication::ProgramDataFolder()ι
-	{
+	fs::path IApplication::ProgramDataFolder()ι{
 		var env = EnvironmentVariable( "ProgramData" );
 		return env.size() ? fs::path{env} : fs::path{};
 	}
@@ -257,12 +250,12 @@ namespace Jde
 	{
 		auto manager = MyOpenSCManager();
 		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
-		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? format("Service '{}' not found.", ApplicationName()) : format("DeleteService failed - {}", ::GetLastError()) );
-		THROW_IF( !::DeleteService(service.get()), "DeleteService failed" );
+		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? Jde::format("Service '{}' not found.", ApplicationName()) : format("DeleteService failed - {}", ::GetLastError()) );
+		THROW_IF( !::DeleteService(service.get()), "DeleteService failed:  {:x}", GetLastError() );
 
 		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
 	}
-	α OSApp::LoadLibrary( path path )ε->void*
+	α OSApp::LoadLibrary( const fs::path& path )ε->void*
 	{
 		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException(path, GetLastError(), "Can not load library") );
 		INFO( "({})Opened"sv, path.string() );

@@ -4,14 +4,12 @@
 typedef HINSTANCE HMODULE;
 #endif
 
-int __stdcall DllMain( HMODULE /*hModule*/, unsigned long  ul_reason_for_call, void* /*lpReserved*/ )
-{
-	switch (ul_reason_for_call)
-	{
-	case 1:
-	case 2:
-	case 3:
-	case 0:
+int __stdcall DllMain( HMODULE /*hModule*/, unsigned long  ul_reason_for_call, void* /*lpReserved*/ ){
+	switch (ul_reason_for_call){
+	case 1://DLL_PROCESS_ATTACH
+	case 2://DLL_THREAD_ATTACH
+	case 3://DLL_THREAD_DETACH
+	case 0://DLL_PROCESS_DETACH
 		break;
 	}
 	return 1;

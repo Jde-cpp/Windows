@@ -47,7 +47,7 @@ namespace Jde::Windows
 
 	void Service::ReportEvent( sv function )ι
 	{ 
-		string buffer = format( "{} failed with {}", function, GetLastError() );
+		string buffer = Jde::format( "{} failed with {}", function, GetLastError() );
 		HANDLE hEventSource = ::RegisterEventSource( nullptr, string{IApplication::ApplicationName()}.c_str() ); RETURN_IF( !hEventSource, ELogLevel::Critical, "RegisterEventSource returned null");
 		const char* lpszStrings[2] = { IApplication::ApplicationName().data(), buffer.data() };
 		::ReportEvent( hEventSource, EVENTLOG_ERROR_TYPE, 0, SVC_ERROR, nullptr, 2, 0, lpszStrings, nullptr );

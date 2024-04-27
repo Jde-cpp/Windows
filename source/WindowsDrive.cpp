@@ -27,7 +27,7 @@ namespace Jde::IO
 			THROW_IFX( !::GetFileSizeEx(Handle.get(), &fileSize), IOException(move(Path), GetLastError(), "GetFileSizeEx") );
 			std::visit( [fileSize](auto&& b){b->resize(fileSize.QuadPart);}, Buffer );
 		}
-		TRACE( "({}){} size={}", Path, IsRead ? "Read" : "Write", Size() );
+		TRACE( "({}){} size={}", Path.string().c_str(), IsRead ? "Read" : "Write", Size() );
 	}
 
 	α OverlappedCompletionRoutine( DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED pOverlapped )->void;
@@ -39,10 +39,10 @@ namespace Jde::IO
 		auto& arg = chunk.FileArg();
 		if( arg.IsRead ){
 			if( !::ReadFileEx(arg.Handle.get(), chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine) )
-				DBG( "ReadFileEx({}) returned false - {}", arg.Path.string().c_str(), GetLastError() );
+				DBG( "ReadFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
 		}
 		else{
-			TRACE( "({})Writing {} - {}"sv, arg.Path, chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
+			TRACE( "({})Writing {} - {}"sv, arg.Path.string(), chunk.StartIndex(), std::min(chunk.StartIndex()+DriveWorker::ChunkSize(), endByteIndex) );
 			var h = arg.Handle.get();
 			if( !::WriteFileEx(h, chunk.Buffer(), (DWORD)(chunk.Bytes), &chunk.Overlap, OverlappedCompletionRoutine) )
 				DBG( "WriteFileEx({}) returned false - {}", arg.Path.string(), GetLastError() );
@@ -69,7 +69,7 @@ namespace Jde::IO
 			}
 			if( promise.HasResult() )
 			{
-				TRACE( "({})OverlappedCompletionRoutine - resume"sv, arg.Path );
+				TRACE( "({})OverlappedCompletionRoutine - resume"sv, arg.Path.string() );
 				WinDriveWorker::Remove( &arg );
 				Coroutine::CoroutinePool::Resume( move(arg.CoHandle) );
 			}
@@ -86,7 +86,7 @@ namespace Jde::IO
 		CoHandle = move( h );
 		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
 			Chunks.emplace_back( mu<FileChunkArg>(*this, i) );
-		TRACE( "({}) chunks = {}", Path, Chunks.size() );
+		TRACE( "({}) chunks = {}", Path.string(), Chunks.size() );
 		WinDriveWorker::Push( this );
 	}
 
@@ -188,8 +188,7 @@ namespace Jde::IO::Drive
 		}
 	};
 
-	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( path dir, SL )ε
-	{
+	flat_map<string,IDirEntryPtr> WindowsDrive::Recursive( const fs::path& dir, SL )ε{
 		CHECK_PATH( dir, SRCE_CUR );
 		var dirString = dir.string();
 		flat_map<string,IDirEntryPtr> entries;
@@ -267,8 +266,7 @@ namespace Jde::IO::Drive
 		return IO::FileUtilities::LoadBinary( dirEntry.Path );
 	}
 
-	void WindowsDrive::SoftLink( path from, path to )ε
-	{
+	void WindowsDrive::SoftLink( const fs::path& from, const fs::path& to )ε{
 		var hr = CreateSymbolicLinkW( ((const std::wstring&)to).c_str(), ((const std::wstring&)from).c_str(), 0 );
 		THROW_IFX( !hr, IOException( from, GetLastError(), format("Creating symbolic link from to '{}'", to.string().c_str())) );
 	}
