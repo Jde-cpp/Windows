@@ -16,8 +16,8 @@ namespace Jde
 
 	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )ε
 	{
-		IApplication::_pInstance = make_shared<OSApp>();
-		return IApplication::_pInstance->BaseStartup( argc, argv, appName, serviceDescription );	
+		IApplication::SetInstance( ms<OSApp>() );
+		return IApplication::Instance().BaseStartup( argc, argv, appName, serviceDescription );	
 	}
 
 	bool OSApp::KillInstance( uint processId )ι{
@@ -76,37 +76,32 @@ namespace Jde
 	{
 		return fs::path( _pgmptr );
 	}
-	string IApplication::HostName()ι
-	{
+	string IApplication::HostName()ι{
 		DWORD maxHostName = 1024;
 		char hostname[1024];
-		THROW_IF( !::GetComputerNameA(hostname, &maxHostName), "GetComputerNameA failed" );
+		if( !::GetComputerNameA(hostname, &maxHostName) )
+			strcpy( hostname, "GetComputerNameA failed" );
 
 		return hostname;
 	}
-	uint OSApp::ProcessId()ι
-	{
+	uint32 OSApp::ProcessId()ι{
 		return _getpid();
 	}
 
-	void IApplication::OnTerminate()ι
-	{
+	void IApplication::OnTerminate()ι{
 		//TODO Implement
 	}
 	
 	bool _isService{false};
-	α OSApp::AsService()ι->bool 
-	{
+	α OSApp::AsService()ι->bool{
 		_isService = true;
 		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
 		return true;
 	}
 	
 	up<flat_multimap<string,string>> _pArgs;
-	α OSApp::Args()ι->const flat_multimap<string,string>&
-	{
-		if( !_pArgs )
-		{
+	α OSApp::Args()ι->const flat_multimap<string,string>&{
+		if( !_pArgs ){
 			_pArgs = mu<flat_multimap<string,string>>();
 			int nArgs;
 			LPWSTR* szArglist = ::CommandLineToArgvW( ::GetCommandLineW(), &nArgs );
@@ -114,7 +109,7 @@ namespace Jde
 				std::cerr << "CommandLineToArgvW failed\n";
 		   else 
 			{
-				for( uint i=0; i<nArgs; ++i ) 
+				for( int i=0; i<nArgs; ++i ) 
 				{
 					var current = Windows::ToString( szArglist[i] );
 					if( current.starts_with('-') )
@@ -147,7 +142,7 @@ namespace Jde
 		INFO( "Starting main thread loop...{}", _getpid() );
 		if( _isService )
 		{
-			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)IApplication::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
+			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)Process::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
 			var success = StartServiceCtrlDispatcher( DispatchTable );//blocks?
 			if( !success )
 				Windows::Service::ReportEvent( "StartServiceCtrlDispatcher" ); 
@@ -158,7 +153,7 @@ namespace Jde
 	string _companyName;
 
 //could get run before initialize logger.
-#define CHECK_NOLOG(condition) if( !(condition) ) throw Jde::Exception{ SRCE_CUR, Jde::ELogLevel::NoLog, #condition }
+#define CHECK_NOLOG(condition) if( !(condition) ) throw Jde::Exception{ SRCE_CUR, Jde::ELogLevel::NoLog, "error: {}", #condition }
 	α LoadResource( sv key )ι->string
 	{
 		string y;
@@ -224,10 +219,14 @@ namespace Jde
 	};
 	using ServiceHandle = std::unique_ptr<SC_HANDLE__, SCDeleter>;
 
-	ServiceHandle MyOpenSCManager()ε
-	{
+	ServiceHandle MyOpenSCManager()ε{
 		auto schSCManager = ServiceHandle{ ::OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS) };
-		THROW_IF( !schSCManager.get(), ::GetLastError()==ERROR_ACCESS_DENIED ? "installation requires administrative privliges." : format("OpenSCManager failed - {}", ::GetLastError()) );
+		if( !schSCManager.get() ){
+			if( ::GetLastError() == ERROR_ACCESS_DENIED )
+				THROW( "installation requires administrative privliges." );
+			else
+				THROW( "OpenSCManager failed - {}", ::GetLastError() );
+		}
 		return schSCManager;
 	}
 
@@ -235,11 +234,15 @@ namespace Jde
 	{
 		auto schSCManager = MyOpenSCManager();
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
-		const string serviceName{ ApplicationName() };
+		const string serviceName{ Process::ApplicationName() };
 		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, ExePath().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
-		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_EXISTS ? "Service allready exists." : format("CreateService failed - {}", ::GetLastError()) );
-		if( serviceDescription.size() )
-		{
+		if( !service.get() ){
+			if( ::GetLastError()==ERROR_SERVICE_EXISTS )
+				THROW( "Service allready exists." );
+			else
+				THROW( "CreateService failed - {}", ::GetLastError() );
+		}
+		if( serviceDescription.size() ){
 			SERVICE_DESCRIPTION d{ (LPSTR)serviceDescription.c_str() };
 			if( !::ChangeServiceConfig2A(service.get(), SERVICE_CONFIG_DESCRIPTION, &d) )
 				std::cerr << "ChangeServiceConfig2A failed" << std::endl;
@@ -249,24 +252,29 @@ namespace Jde
 	α OSApp::Uninstall()ε->void
 	{
 		auto manager = MyOpenSCManager();
-		auto service = ServiceHandle{ ::OpenService(manager.get(), string{ApplicationName()}.c_str(), DELETE) }; 
-		THROW_IF( !service.get(), ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST ? Jde::format("Service '{}' not found.", ApplicationName()) : format("DeleteService failed - {}", ::GetLastError()) );
+		auto service = ServiceHandle{ ::OpenService(manager.get(), Process::ApplicationName().c_str(), DELETE) }; 
+		if( !service.get() ){
+			if( ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST )
+				THROW( "Service '{}' not found.", Process::ApplicationName() );
+			else
+				THROW( "DeleteService failed - {}", ::GetLastError() );
+		}
 		THROW_IF( !::DeleteService(service.get()), "DeleteService failed:  {:x}", GetLastError() );
 
-		INFO( "Service '{}' deleted successfully"sv, ApplicationName() ); 
+		INFO( "Service '{}' deleted successfully"sv, Process::ApplicationName() ); 
 	}
-	α OSApp::LoadLibrary( const fs::path& path )ε->void*
-	{
+	
+	α OSApp::LoadLibrary( const fs::path& path )ε->void*{
 		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException(path, GetLastError(), "Can not load library") );
 		INFO( "({})Opened"sv, path.string() );
 		return p;
 	}
-	α OSApp::FreeLibrary( void* p )ι->void
-	{
+	
+	α OSApp::FreeLibrary( void* p )ι->void{
 		::FreeLibrary( (HMODULE)p );
 	}
-	α OSApp::GetProcAddress( void* pModule, str procName )ε->void*
-	{
+#pragma clang diagnostic ignored "-Wmicrosoft-cast"
+	α OSApp::GetProcAddress( void* pModule, str procName )ε->void*{
 		auto p = ::GetProcAddress( (HMODULE)pModule, procName.c_str() ); CHECK( p );
 		return p;
 	}

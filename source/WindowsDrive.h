@@ -26,15 +26,14 @@ namespace Jde::IO
 		uint Bytes;
 	};
 
-	struct WinDriveWorker : Threading::IQueueWorker<FileIOArg*,WinDriveWorker>
-	{
+	struct WinDriveWorker : Threading::IQueueWorker<FileIOArg*,WinDriveWorker>{
 		using base=IQueueWorker<FileIOArg*,WinDriveWorker>;
 		WinDriveWorker():base{}{}
 		Ω Remove( FileIOArg* pArg )ι->void;
 		α Poll()ι->optional<bool> override;
 		α HandleRequest( FileIOArg*&& x )ι->void override;
 		α SetWorker( FileIOArg*& p )ι->void override{ p->SetWorker( shared_from_this() ); }
-		α Shutdown()ι->void override{}
+		α Shutdown( bool /*terminate*/ )ι->void override{}
 		static constexpr sv Name{ "drive" };
 
 	private:
@@ -100,10 +99,10 @@ namespace Jde::IO::Drive
 		flat_map<string,IDirEntryPtr> Recursive( const fs::path& dir, SRCE )ε override;
 		IDirEntryPtr Save( const fs::path& path, const vector<char>& bytes, const IDirEntry& dirEntry )ε override;
 		IDirEntryPtr CreateFolder( const fs::path& path, const IDirEntry& dirEntry )ε override;
-		void Remove( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
-		void Trash( const fs::path& /*path*/ ){THROW( "Not Implemented" );}
+		void Remove( const fs::path& /*path*/ )ε override{THROW( "Not Implemented" );}
+		void Trash( const fs::path& /*path*/ )ε override{THROW( "Not Implemented" );}
 		void TrashDisposal( TimePoint /*latestDate*/ )override{THROW( "Not Implemented" );}
-		VectorPtr<char> Load( const IDirEntry& dirEntry )ε override;
+		sp<vector<char>> Load( const IDirEntry& dirEntry )ε override;
 		void Restore( sv )ε override{ THROW("Not Implemented"); }
 		void SoftLink( const fs::path& from, const fs::path& to )ε override;
 		//DriveAwaitable Read( fs::path&& path, bool vector=true )ι{ return DriveAwaitable{move(path), vector,shared_from_this()}; }
