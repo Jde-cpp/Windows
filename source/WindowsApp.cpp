@@ -17,7 +17,7 @@ namespace Jde
 	flat_set<string> OSApp::Startup( int argc, char** argv, sv appName, string serviceDescription )ε
 	{
 		IApplication::SetInstance( ms<OSApp>() );
-		return IApplication::Instance().BaseStartup( argc, argv, appName, serviceDescription );	
+		return IApplication::Instance().BaseStartup( argc, argv, appName, serviceDescription );
 	}
 
 	bool OSApp::KillInstance( uint processId )ι{
@@ -51,7 +51,7 @@ namespace Jde
 		//	pThread->Interrupt();
 		//for( auto pThread : IApplication::GetBackgroundThreads() )
 		//	pThread->Join();
-		//exit( 1 ); 
+		//exit( 1 );
 		return handled;
 //		unreachable... return TRUE;
 	}
@@ -90,14 +90,14 @@ namespace Jde
 	void IApplication::OnTerminate()ι{
 		//TODO Implement
 	}
-	
+
 	bool _isService{false};
 	α OSApp::AsService()ι->bool{
 		_isService = true;
 		Windows::Service::ReportStatus( SERVICE_START_PENDING, NO_ERROR, 3000 );
 		return true;
 	}
-	
+
 	up<flat_multimap<string,string>> _pArgs;
 	α OSApp::Args()ι->const flat_multimap<string,string>&{
 		if( !_pArgs ){
@@ -106,9 +106,9 @@ namespace Jde
 			LPWSTR* szArglist = ::CommandLineToArgvW( ::GetCommandLineW(), &nArgs );
 			if( !szArglist )
 				std::cerr << "CommandLineToArgvW failed\n";
-		   else 
+		   else
 			{
-				for( int i=0; i<nArgs; ++i ) 
+				for( int i=0; i<nArgs; ++i )
 				{
 					var current = Windows::ToString( szArglist[i] );
 					if( current.starts_with('-') )
@@ -142,7 +142,7 @@ namespace Jde
 			SERVICE_TABLE_ENTRY DispatchTable[] = {  { (char*)Process::ApplicationName().data(), (LPSERVICE_MAIN_FUNCTION)Windows::Service::Main },  { nullptr, nullptr }  };
 			var success = StartServiceCtrlDispatcher( DispatchTable );//blocks?
 			if( !success )
-				Windows::Service::ReportEvent( "StartServiceCtrlDispatcher" ); 
+				Windows::Service::ReportEvent( "StartServiceCtrlDispatcher" );
 		}
 		else
 			Windows::WindowsWorkerMain::Start( false );
@@ -235,7 +235,7 @@ namespace Jde
 		auto schSCManager = MyOpenSCManager();
 		//auto schSCManager = ::OpenSCManager( nullptr, nullptr, SC_MANAGER_ALL_ACCESS ); THROW_IF( schSCManager==nullptr, "OpenSCManager failed - {}", ::GetLastError() );
 		const string serviceName{ Process::ApplicationName() };
-		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, ExePath().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) }; 
+		auto service = ServiceHandle{ ::CreateService(schSCManager.get(), serviceName.c_str(), (serviceName).c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, ExePath().string().c_str(), nullptr, nullptr, nullptr, nullptr, nullptr) };
 		if( !service.get() ){
 			if( ::GetLastError()==ERROR_SERVICE_EXISTS )
 				THROW( "Service allready exists." );
@@ -251,7 +251,7 @@ namespace Jde
 	}
 	α OSApp::Uninstall()ε->void{
 		auto manager = MyOpenSCManager();
-		auto service = ServiceHandle{ ::OpenService(manager.get(), Process::ApplicationName().c_str(), DELETE) }; 
+		auto service = ServiceHandle{ ::OpenService(manager.get(), Process::ApplicationName().c_str(), DELETE) };
 		if( !service.get() ){
 			if( ::GetLastError()==ERROR_SERVICE_DOES_NOT_EXIST )
 				THROW( "Service '{}' not found.", Process::ApplicationName() );
@@ -262,13 +262,13 @@ namespace Jde
 
 		Information{ ELogTags::App, "Service '{}' deleted successfully"sv, Process::ApplicationName() };
 	}
-	
+
 	α OSApp::LoadLibrary( const fs::path& path )ε->void*{
 		auto p = ::LoadLibrary( path.string().c_str() ); THROW_IFX( !p, IOException(path, GetLastError(), "Can not load library") );
 		Information{ ELogTags::App, "({})Opened"sv, path.string() };
 		return p;
 	}
-	
+
 	α OSApp::FreeLibrary( void* p )ι->void{
 		::FreeLibrary( (HMODULE)p );
 	}

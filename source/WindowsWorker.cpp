@@ -13,7 +13,7 @@ namespace Jde::Windows
 #define CREATE_EVENT ::CreateEvent(nullptr, TRUE, FALSE, nullptr)
 
 	WindowsWorker::WindowsWorker( bool runOnMainThread )ι:
-		_eventQueue{ CREATE_EVENT }, 
+		_eventQueue{ CREATE_EVENT },
 		_eventStop{ CREATE_EVENT },
 		_pThread{ runOnMainThread ? nullptr : mu<std::jthread>([&](){Loop();}) }
 	{}
