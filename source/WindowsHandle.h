@@ -18,7 +18,7 @@ namespace Jde{
 			using pointer=WinHandle;
 			void operator()( WinHandle handle )Ι{ 
 				if( handle && !::CloseHandle(handle) )
-					WARNT( AppTag(), "CloseHandle returned {}", ::GetLastError() ); 
+					Warning( ELogTags::App, "CloseHandle returned {}", ::GetLastError() ); 
 			}
 		};
 	private:

@@ -81,7 +81,7 @@ namespace Jde::IO
 		//LOG( "~OverlappedCompletionRoutine"sv );
 	}
 
-	α FileIOArg::Send( coroutine_handle<Task::promise_type>&& h )ι->void
+	α FileIOArg::Send( coroutine_handle<Task::promise_type> h )ι->void
 	{
 		CoHandle = move( h );
 		for( uint i=0; i*DriveWorker::ChunkSize()<Size(); ++i )
@@ -148,9 +148,7 @@ namespace Jde::IO
 		}
 	}
 
-	α DriveAwaitable::await_resume()ι->AwaitResult
-	{
-		base::AwaitResume();
+	α DriveAwaitable::await_resume()ι->AwaitResult{
 		sp<void> pVoid = std::visit( [](auto&& x){return (sp<void>)x;}, _arg.Buffer );
 		if( _cache && _pPromise )
 			Cache::Set( _arg.Path.string(), pVoid );
@@ -158,21 +156,17 @@ namespace Jde::IO
 	}
 }
 
-namespace Jde::IO::Drive
-{
-	std::wstring WindowsPath( const fs::path& path )
-	{
+namespace Jde::IO::Drive{
+	α WindowsPath( const fs::path& path )->std::wstring{
 		return std::wstring(L"\\\\?\\")+path.wstring();
 	}
-	WIN32_FILE_ATTRIBUTE_DATA GetInfo( const fs::path& path )ε
-	{
+	α GetInfo( const fs::path& path )ε->WIN32_FILE_ATTRIBUTE_DATA{
 		WIN32_FILE_ATTRIBUTE_DATA fInfo;
 		THROW_IFX( !GetFileAttributesExW(WindowsPath(path).c_str(), GetFileExInfoStandard, &fInfo), IOException(path, GetLastError(), "Could not get file attributes.") );
 		return fInfo;
 	}
 
-	struct DirEntry : IDirEntry
-	{
+	struct DirEntry : IDirEntry{
 		DirEntry( const fs::path& path ):
 			DirEntry( path, GetInfo(path) )
 		{}
@@ -194,7 +188,7 @@ namespace Jde::IO::Drive
 		flat_map<string,IDirEntryPtr> entries;
 
 		std::function<void(const fs::directory_entry&)> fnctn;
-		fnctn = [&dir, &dirString, &entries, &fnctn]( const fs::directory_entry& entry )
+		fnctn = [&dirString, &entries, &fnctn]( const fs::directory_entry& entry )
 		{
 			var status = entry.status();
 			var relativeDir = entry.path().string().substr( dirString.size()+1 );
@@ -260,9 +254,7 @@ namespace Jde::IO::Drive
 		return make_shared<DirEntry>( path );
 	}
 
-	//VectorPtr<char> WindowsDrive::Load( const fs::path& path )ε
-	VectorPtr<char> WindowsDrive::Load( const IDirEntry& dirEntry )ε
-	{
+	sp<vector<char>> WindowsDrive::Load( const IDirEntry& dirEntry )ε{
 		return IO::FileUtilities::LoadBinary( dirEntry.Path );
 	}
 

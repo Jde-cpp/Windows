@@ -1,5 +1,4 @@
-﻿#pragma once
-#include "WindowsWorker.h"
+﻿#include "WindowsWorker.h"
 #include "WindowsSvc.h"
 #include "../../Framework/source/coroutine/Coroutine.h"
 #include "../../Framework/source/threading/Mutex.h"
@@ -12,17 +11,18 @@ namespace Jde::Windows
 	sp<LogTag> _logTag{ Logging::Tag("threads") };
 
 #define CREATE_EVENT ::CreateEvent(nullptr, TRUE, FALSE, nullptr)
-#define WORKER_INIT _eventQueue{ CREATE_EVENT }, _eventStop{ CREATE_EVENT }
 
 	WindowsWorker::WindowsWorker( bool runOnMainThread )ι:
-		WORKER_INIT,
-		_pThread{ runOnMainThread ? nullptr : mu<jthread>([&](){Loop();}) }
+		_eventQueue{ CREATE_EVENT }, 
+		_eventStop{ CREATE_EVENT },
+		_pThread{ runOnMainThread ? nullptr : mu<std::jthread>([&](){Loop();}) }
 	{}
 
 	WindowsWorker::WindowsWorker( Event&& initial )ι:
+		_eventQueue{ CREATE_EVENT },
+		_eventStop{ CREATE_EVENT },
 		_queue{ move(initial) },
-		WORKER_INIT,
-		_pThread{ mu<jthread>( [&](){Loop();}) }
+		_pThread{ mu<std::jthread>( [&](){Loop();}) }
 	{}
 
 	void WindowsWorker::Stop()ι
@@ -174,12 +174,12 @@ namespace Jde::Windows
 		}
 	}
 
-	α WindowsWorkerMain::Stop( int exitCode )ι->void
-	{
-		if( _pInstance )
-		{
-			INFO( "Stopping {}", exitCode );
-			IApplication::Exit( exitCode );
+	α WindowsWorkerMain::Stop( int exitCode )ι->void{
+		if( _pInstance ){
+			var tags = ELogTags::App | ELogTags::Shutdown;
+			Debug{ tags, "({})Stopping", exitCode };
+			Process::Shutdown( exitCode );
+			Debug{ tags, "({})Shutdown Complete", exitCode };
 			LOG_IF( !::SetEvent(_pInstance->_eventStop), ELogLevel::Error, "SetEvent returned false" );
 		}
 		else

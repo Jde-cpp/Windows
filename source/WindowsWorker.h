@@ -19,6 +19,7 @@ namespace Jde::Windows
 	struct WindowsWorker /*final*/: std::enable_shared_from_this<WindowsWorker>{
 		WindowsWorker( bool runOnMainThread )ι;
 		WindowsWorker( Event&& initial )ι;
+		virtual ~WindowsWorker(){};
 		α Stop()ι->void;
 		α SubPush( Event& e )ι->bool;
 		α Stopped()ι{ return ((TimePoint)_stop)!=TimePoint{}; }
@@ -43,7 +44,7 @@ namespace Jde::Windows
 		α IsMainThread()Ι{ return _eventWorker!=nullptr; }
 		Duration _shutdownWait{5s};
 		HANDLE _eventWorker{ nullptr };
-		up<jthread> _pThread;//3rd class...
+		up<std::jthread> _pThread;//3rd class...
 		std::atomic_flag _lock;
 
 	};
@@ -56,7 +57,7 @@ namespace Jde::Windows
 	private:
 		WindowsWorkerMain( bool runOnMainThread )ι;
 		vector<sp<WindowsWorker>> _workerBuffers;
-		constexpr virtual uint MaxEvents()ι{return MAXIMUM_WAIT_OBJECTS-3; }
+		constexpr virtual uint MaxEvents()ι override{return MAXIMUM_WAIT_OBJECTS-3; }
 		void HandleEvent( Event&& e )ι override;
 		void HandleWorkerEvent()ι override;
 		static up<WindowsWorkerMain> _pInstance;
